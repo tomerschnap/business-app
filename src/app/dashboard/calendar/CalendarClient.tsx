@@ -88,14 +88,15 @@ export default function CalendarClient({ initialAppointments, initialOrders }: {
               const ords = ordersOn(ds)
               const total = appts.length + ords.length
               return (
-                <div key={i} className={cn('border-b border-l border-slate-100 p-1', dimmed && 'opacity-40')}>
+                <div key={i} className={cn('border-b border-l border-slate-100 p-1 cursor-pointer hover:bg-slate-50 transition-colors', dimmed && 'opacity-40')}
+                  onClick={() => { setCurrent(new Date(date)); setView('day') }}>
                   <span className={cn('text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full mb-0.5',
                     isToday ? 'bg-primary text-white' : 'text-slate-600'
                   )}>{date.getDate()}</span>
                   <div className="space-y-0.5">
                     {ords.slice(0, 1).map(o => (
                       <div key={o.id}
-                        onClick={() => setDetailOrder(o)}
+                        onClick={e => { e.stopPropagation(); setDetailOrder(o) }}
                         className="text-white text-xs rounded px-1.5 py-0.5 truncate cursor-pointer hover:opacity-80 bg-amber-500 flex items-center gap-1"
                       >
                         <ShoppingBag className="h-2.5 w-2.5 shrink-0" />
@@ -104,7 +105,7 @@ export default function CalendarClient({ initialAppointments, initialOrders }: {
                     ))}
                     {appts.slice(0, ords.length > 0 ? 1 : 2).map(a => (
                       <div key={a.id}
-                        onClick={() => setDetailAppt(a)}
+                        onClick={e => { e.stopPropagation(); setDetailAppt(a) }}
                         className={cn('text-white text-xs rounded px-1.5 py-0.5 truncate cursor-pointer hover:opacity-80', customerColor(a.customer_name))}
                       >
                         <span className="hidden sm:inline">{a.time.slice(0,5)} </span>{a.customer_name}
