@@ -135,10 +135,15 @@ export default function AppointmentsClient({ initialAppointments, customers, wor
   const [loading, setLoading] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
-  // Compute available slots whenever date changes
-  const availableSlots = getSlotsForDate(form.date, workingHours)
+  // Compute available slots: within working hours AND not already booked (excluding the appt being edited)
+  const takenTimes = new Set(
+    appointments
+      .filter(a => a.date === form.date && a.id !== editing?.id)
+      .map(a => a.time)
+  )
+  const availableSlots = getSlotsForDate(form.date, workingHours).filter(t => !takenTimes.has(t))
 
-  // When date changes, snap time to first available slot if current is outside
+  // When date changes, snap time to first available slot if current is no longer available
   useEffect(() => {
     if (form.date && availableSlots.length > 0 && !availableSlots.includes(form.time)) {
       setForm(f => ({ ...f, time: availableSlots[0] }))
@@ -167,19 +172,25 @@ export default function AppointmentsClient({ initialAppointments, customers, wor
     if (!form.customer_name.trim()) return toast.error('נא להזין שם לקוח')
     if (!form.date) return toast.error('נא לבחור תאריך')
     if (!form.time) return toast.error('נא לבחור שעה')
-    if (availableSlots.length > 0 && !availableSlots.includes(form.time))
-      return toast.error('השעה הנבחרת מחוץ לשעות הפעילות')
-    if (availableSlots.length === 0) return toast.error('העסק סגור ביום זה')
+    if (availableSlots.length === 0 && workingHours) return toast.error('העסק סגור ביום זה')
+    if (takenTimes.has(form.time)) return toast.error(`השעה ${form.time} כבר תפוסה — בחר שעה אחרת`)
     setLoading(true)
+    const payload = {
+      customer_name: form.customer_name.trim(),
+      date: form.date,
+      time: form.time,
+      duration: form.duration,
+      notes: form.notes,
+    }
     if (editing) {
-      const { data, error } = await supabase.from('appointments').update(form).eq('id', editing.id).select().single()
+      const { data, error } = await supabase.from('appointments').update(payload).eq('id', editing.id).select().single()
       if (error) toast.error(error.message)
       else {
         setAppointments(as => as.map(a => a.id === editing.id ? data : a).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)))
         toast.success('התור עודכן'); setOpen(false)
       }
     } else {
-      const { data, error } = await supabase.from('appointments').insert(form).select().single()
+      const { data, error } = await supabase.from('appointments').insert(payload).select().single()
       if (error) toast.error(error.message)
       else {
         setAppointments(as => [...as, data].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)))

@@ -87,13 +87,30 @@ export default function BusinessClient({ initialProfile, userId }: {
   async function handleSave() {
     if (!form.name.trim()) return toast.error('שם העסק הוא שדה חובה')
     setLoading(true)
-    const payload = { ...form, user_id: userId, updated_at: new Date().toISOString() }
-    const { error } = await supabase
-      .from('business_profiles')
-      .upsert(payload, { onConflict: 'user_id' })
-    if (error) toast.error(error.message)
-    else toast.success('הפרופיל נשמר בהצלחה')
-    setLoading(false)
+    try {
+      const payload = {
+        user_id: userId,
+        name: form.name,
+        phone: form.phone,
+        address: form.address,
+        description: form.description,
+        logo_url: form.logo_url,
+        website: form.website,
+        working_hours: form.working_hours ?? {},
+        updated_at: new Date().toISOString(),
+      }
+      if (form.id) {
+        const { error } = await supabase.from('business_profiles').update(payload).eq('id', form.id)
+        if (error) { toast.error(error.message); return }
+      } else {
+        const { data: inserted, error } = await supabase.from('business_profiles').insert(payload).select().single()
+        if (error) { toast.error(error.message); return }
+        if (inserted) setForm(f => ({ ...f, id: inserted.id }))
+      }
+      toast.success('הפרופיל נשמר בהצלחה')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const wh = form.working_hours ?? DEFAULT_WORKING_HOURS

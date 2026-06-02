@@ -5,13 +5,14 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
-import { Menu, X, Briefcase, LayoutDashboard, Users, CalendarDays, CalendarRange, LogOut, ShoppingBag, Store } from 'lucide-react'
+import { Menu, X, Briefcase, LayoutDashboard, Users, CalendarDays, CalendarRange, LogOut, ShoppingBag, Store, Users2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 const navItems = [
   { href: '/dashboard', label: 'סקירה כללית', icon: LayoutDashboard },
   { href: '/dashboard/customers', label: 'לקוחות', icon: Users },
   { href: '/dashboard/appointments', label: 'תורים', icon: CalendarDays },
+  { href: '/dashboard/group', label: 'תורים קבוצתיים', icon: Users2 },
   { href: '/dashboard/orders', label: 'הזמנות', icon: ShoppingBag },
   { href: '/dashboard/calendar', label: 'לוח שנה', icon: CalendarRange },
   { href: '/dashboard/business', label: 'פרופיל עסק', icon: Store },
