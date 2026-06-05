@@ -34,12 +34,23 @@ const ALL_TIME_SLOTS: string[] = (() => {
   return s
 })()
 
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+function durationToMinutes(d: string): number {
+  if (d === 'שעה') return 60
+  const match = d.match(/(\d+)/)
+  return match ? parseInt(match[1]) : 30
+}
+
 function getSlotsForDate(date: string, wh: WorkingHours | null): string[] {
   if (!wh || !date) return ALL_TIME_SLOTS
-  const dow = new Date(date + 'T00:00:00').getDay() // 0=Sun
+  const dow = new Date(date + 'T00:00:00').getDay()
   const day = DAY_KEYS[dow]
   const config = wh[day]
-  if (!config?.enabled) return [] // closed that day
+  if (!config?.enabled) return []
   return ALL_TIME_SLOTS.filter(t => t >= config.open && t <= config.close)
 }
 
@@ -60,7 +71,7 @@ function WheelPicker({ slots, value, onChange }: { slots: string[]; value: strin
     const idx = slots.indexOf(value)
     scrollToIndex(idx >= 0 ? idx : 0, false)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots]) // re-scroll when slots list changes
+  }, [slots])
 
   function handleScroll() {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -76,7 +87,7 @@ function WheelPicker({ slots, value, onChange }: { slots: string[]; value: strin
   if (slots.length === 0) {
     return (
       <div className="flex items-center justify-center py-10 text-slate-400 text-sm">
-        העסק סגור ביום זה
+        אין שעות פנויות ביום זה
       </div>
     )
   }
@@ -119,7 +130,7 @@ function StatusBadge({ date }: { date: string }) {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function AppointmentsClient({ initialAppointments, customers, workingHours }: {
+export default function AppointmentsClient({ initialAppointments, customers: initialCustomers, workingHours }: {
   initialAppointments: Appointment[]
   customers: Customer[]
   workingHours: WorkingHours | null
@@ -128,6 +139,7 @@ export default function AppointmentsClient({ initialAppointments, customers, wor
   const [appointments, setAppointments] = useState<Appointment[]>(
     [...initialAppointments].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
   )
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Appointment | null>(null)
   const [form, setForm] = useState(emptyForm)
@@ -135,13 +147,35 @@ export default function AppointmentsClient({ initialAppointments, customers, wor
   const [loading, setLoading] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
-  // Compute available slots: within working hours AND not already booked (excluding the appt being edited)
-  const takenTimes = new Set(
-    appointments
-      .filter(a => a.date === form.date && a.id !== editing?.id)
-      .map(a => a.time)
-  )
-  const availableSlots = getSlotsForDate(form.date, workingHours).filter(t => !takenTimes.has(t))
+  // ── Compute blocked + available slots ────────────────────────────────────────
+  const todayStr = new Date().toISOString().split('T')[0]
+
+  // Block slots that fall within the span of any existing appointment on this date
+  const blockedByOverlap = new Set<string>()
+  appointments
+    .filter(a => a.date === form.date && a.id !== editing?.id)
+    .forEach(a => {
+      const startMin = timeToMinutes(a.time)
+      const endMin = startMin + durationToMinutes(a.duration || '30 דקות')
+      ALL_TIME_SLOTS.forEach(slot => {
+        const slotMin = timeToMinutes(slot)
+        // Block the slot if it falls inside [start, end) of an existing appointment
+        if (slotMin >= startMin && slotMin < endMin) blockedByOverlap.add(slot)
+      })
+    })
+
+  // Block past slots when today is selected
+  const nowMinutes = form.date === todayStr
+    ? new Date().getHours() * 60 + new Date().getMinutes()
+    : -1
+
+  const availableSlots = getSlotsForDate(form.date, workingHours).filter(slot => {
+    if (blockedByOverlap.has(slot)) return false
+    if (nowMinutes >= 0 && timeToMinutes(slot) <= nowMinutes) return false
+    return true
+  })
+
+  const dayClosed = form.date ? getSlotsForDate(form.date, workingHours).length === 0 && workingHours !== null : false
 
   // When date changes, snap time to first available slot if current is no longer available
   useEffect(() => {
@@ -168,13 +202,28 @@ export default function AppointmentsClient({ initialAppointments, customers, wor
     setOpen(true)
   }
 
+  async function autoSaveCustomer(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    const alreadyExists = customers.some(c => c.name.toLowerCase() === trimmed.toLowerCase())
+    if (alreadyExists) return
+    const { data } = await supabase.from('customers').insert({ name: trimmed }).select('id, name').single()
+    if (data) setCustomers(cs => [...cs, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
+  }
+
   async function handleSave() {
     if (!form.customer_name.trim()) return toast.error('נא להזין שם לקוח')
     if (!form.date) return toast.error('נא לבחור תאריך')
     if (!form.time) return toast.error('נא לבחור שעה')
-    if (availableSlots.length === 0 && workingHours) return toast.error('העסק סגור ביום זה')
-    if (takenTimes.has(form.time)) return toast.error(`השעה ${form.time} כבר תפוסה — בחר שעה אחרת`)
+    if (dayClosed) return toast.error('העסק סגור ביום זה')
+    if (!availableSlots.includes(form.time) && availableSlots.length > 0)
+      return toast.error('השעה הנבחרת אינה פנויה — בחר שעה אחרת')
+
     setLoading(true)
+
+    // Auto-save new customer
+    if (customerMode === 'new') await autoSaveCustomer(form.customer_name)
+
     const payload = {
       customer_name: form.customer_name.trim(),
       date: form.date,
@@ -184,18 +233,14 @@ export default function AppointmentsClient({ initialAppointments, customers, wor
     }
     if (editing) {
       const { data, error } = await supabase.from('appointments').update(payload).eq('id', editing.id).select().single()
-      if (error) toast.error(error.message)
-      else {
-        setAppointments(as => as.map(a => a.id === editing.id ? data : a).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)))
-        toast.success('התור עודכן'); setOpen(false)
-      }
+      if (error) { toast.error(error.message); setLoading(false); return }
+      setAppointments(as => as.map(a => a.id === editing.id ? data : a).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)))
+      toast.success('התור עודכן'); setOpen(false)
     } else {
       const { data, error } = await supabase.from('appointments').insert(payload).select().single()
-      if (error) toast.error(error.message)
-      else {
-        setAppointments(as => [...as, data].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)))
-        toast.success('התור נקבע בהצלחה'); setOpen(false)
-      }
+      if (error) { toast.error(error.message); setLoading(false); return }
+      setAppointments(as => [...as, data].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)))
+      toast.success('התור נקבע בהצלחה'); setOpen(false)
     }
     setLoading(false)
   }
@@ -358,20 +403,23 @@ export default function AppointmentsClient({ initialAppointments, customers, wor
                 <Clock className="h-4 w-4 text-slate-400" /> שעה
                 {form.date && workingHours && availableSlots.length > 0 && (
                   <span className="text-xs font-normal text-slate-400 mr-1">
-                    ({getSlotsForDate(form.date, workingHours)[0]} – {getSlotsForDate(form.date, workingHours).at(-1)})
+                    ({availableSlots[0]} – {availableSlots[availableSlots.length - 1]})
                   </span>
                 )}
               </Label>
               <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
                 <WheelPicker
-                  key={form.date} // remount when date changes so scroll resets
+                  key={form.date}
                   slots={availableSlots.length > 0 ? availableSlots : (form.date ? [] : ALL_TIME_SLOTS)}
                   value={form.time}
                   onChange={v => set('time', v)}
                 />
               </div>
-              {form.date && availableSlots.length === 0 && (
-                <p className="text-xs text-red-500 flex items-center gap-1">העסק סגור ביום זה — לא ניתן לקבוע תור</p>
+              {form.date && dayClosed && (
+                <p className="text-xs text-red-500">העסק סגור ביום זה — לא ניתן לקבוע תור</p>
+              )}
+              {form.date && !dayClosed && availableSlots.length === 0 && (
+                <p className="text-xs text-amber-600">כל השעות ביום זה תפוסות</p>
               )}
             </div>
 

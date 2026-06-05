@@ -34,7 +34,7 @@ function StatusBadge({ date }: { date: string }) {
   return <Badge variant="outline" className="text-xs font-normal text-blue-600 border-blue-200">קרוב</Badge>
 }
 
-export default function OrdersClient({ initialOrders, customers }: {
+export default function OrdersClient({ initialOrders, customers: initialCustomers }: {
   initialOrders: Order[]
   customers: Customer[]
 }) {
@@ -42,6 +42,7 @@ export default function OrdersClient({ initialOrders, customers }: {
   const [orders, setOrders] = useState<Order[]>(
     [...initialOrders].sort((a, b) => a.date.localeCompare(b.date))
   )
+  const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Order | null>(null)
   const [form, setForm] = useState(emptyForm)
@@ -70,10 +71,23 @@ export default function OrdersClient({ initialOrders, customers }: {
     setOpen(true)
   }
 
+  async function autoSaveCustomer(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    const alreadyExists = customers.some(c => c.name.toLowerCase() === trimmed.toLowerCase())
+    if (alreadyExists) return
+    const { data } = await supabase.from('customers').insert({ name: trimmed }).select('id, name').single()
+    if (data) setCustomers(cs => [...cs, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
+  }
+
   async function handleSave() {
     if (!form.customer_name) return toast.error('נא לבחור לקוח')
     if (!form.date) return toast.error('נא לבחור תאריך')
     setLoading(true)
+
+    // Auto-save new customer
+    if (customerMode === 'new') await autoSaveCustomer(form.customer_name)
+
     const payload = {
       customer_name: form.customer_name,
       date: form.date,
