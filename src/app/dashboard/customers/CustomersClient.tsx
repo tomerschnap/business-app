@@ -11,9 +11,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { Card, CardContent } from '@/components/ui/card'
 import { Plus, Pencil, Trash2, Search, Users, Phone, Mail } from 'lucide-react'
+import { logActivity } from '@/lib/logActivity'
 
-type Customer = { id: string; name: string; email: string; phone: string; created_at: string }
-const empty = { name: '', email: '', phone: '' }
+type Customer = { id: string; name: string; email: string; phone: string; notes: string; created_at: string }
+const empty = { name: '', email: '', phone: '', notes: '' }
 
 export default function CustomersClient({ initialCustomers }: { initialCustomers: Customer[] }) {
   const supabase = createClient()
@@ -34,7 +35,7 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
     .sort((a, b) => a.name.localeCompare(b.name, 'he'))
 
   function openAdd() { setEditing(null); setForm(empty); setOpen(true) }
-  function openEdit(c: Customer) { setEditing(c); setForm({ name: c.name, email: c.email, phone: c.phone }); setOpen(true) }
+  function openEdit(c: Customer) { setEditing(c); setForm({ name: c.name, email: c.email, phone: c.phone, notes: c.notes || '' }); setOpen(true) }
 
   async function handleSave() {
     if (!form.name.trim()) return toast.error('שם הוא שדה חובה')
@@ -46,7 +47,10 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
     } else {
       const { data, error } = await supabase.from('customers').insert(form).select().single()
       if (error) toast.error(error.message)
-      else { setCustomers(cs => [data, ...cs]); toast.success('לקוח נוסף בהצלחה'); setOpen(false) }
+      else {
+        setCustomers(cs => [data, ...cs]); toast.success('לקוח נוסף בהצלחה'); setOpen(false)
+        await logActivity('לקוח חדש', `שם: ${form.name.trim()}`)
+      }
     }
     setLoading(false)
   }
@@ -169,6 +173,13 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
             <div className="space-y-2">
               <Label>טלפון</Label>
               <Input dir="ltr" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="050-0000000" className="text-left" />
+            </div>
+            <div className="space-y-2">
+              <Label>הערות</Label>
+              <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="הערות על הלקוח..."
+                rows={3}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none" />
             </div>
           </div>
           <DialogFooter className="flex-row-reverse gap-2">

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, Users, CalendarDays, CalendarRange, LogOut, Briefcase, ShoppingBag, Store, Users2 } from 'lucide-react'
+import { LayoutDashboard, Users, CalendarDays, CalendarRange, LogOut, Briefcase, ShoppingBag, Store, Users2, ClipboardList } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
@@ -16,6 +16,7 @@ const navItems = [
   { href: '/dashboard/group', label: 'תורים קבוצתיים', icon: Users2 },
   { href: '/dashboard/orders', label: 'הזמנות', icon: ShoppingBag },
   { href: '/dashboard/calendar', label: 'לוח שנה', icon: CalendarRange },
+  { href: '/dashboard/activity', label: 'יומן פעולות', icon: ClipboardList },
   { href: '/dashboard/business', label: 'פרופיל עסק', icon: Store },
 ]
 

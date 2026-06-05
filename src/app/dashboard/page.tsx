@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Users, CalendarCheck, ShoppingBag } from 'lucide-react'
+import { Users, CalendarCheck, ShoppingBag, Banknote, TrendingUp } from 'lucide-react'
 
 export default async function DashboardPage() {
   const supabase = createClient()
@@ -8,19 +8,30 @@ export default async function DashboardPage() {
   const now = new Date()
   const today = now.toISOString().split('T')[0]
 
-  // Start of current week (Sunday)
   const weekStart = new Date(now)
   weekStart.setDate(now.getDate() - now.getDay())
   const weekStartStr = weekStart.toISOString().split('T')[0]
 
-  const [{ count: customerCount }, { count: todayCount }, { count: weekOrdersCount }] =
-    await Promise.all([
-      supabase.from('customers').select('*', { count: 'exact', head: true }),
-      supabase.from('appointments').select('*', { count: 'exact', head: true })
-        .eq('date', today),
-      supabase.from('orders').select('*', { count: 'exact', head: true })
-        .gte('date', weekStartStr),
-    ])
+  const [
+    { count: customerCount },
+    { count: todayCount },
+    { count: weekOrdersCount },
+    { data: todayAppts },
+    { data: weekAppts },
+  ] = await Promise.all([
+    supabase.from('customers').select('*', { count: 'exact', head: true }),
+    supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('date', today),
+    supabase.from('orders').select('*', { count: 'exact', head: true }).gte('date', weekStartStr),
+    supabase.from('appointments').select('price').eq('date', today).neq('status', 'בוטל'),
+    supabase.from('appointments').select('price').gte('date', weekStartStr).neq('status', 'בוטל'),
+  ])
+
+  const todayRevenue = todayAppts?.reduce((s, a) => s + (Number(a.price) || 0), 0) ?? 0
+  const weekRevenue = weekAppts?.reduce((s, a) => s + (Number(a.price) || 0), 0) ?? 0
+
+  function fmtPrice(n: number) {
+    return '₪' + n.toLocaleString('he-IL', { maximumFractionDigits: 0 })
+  }
 
   const stats = [
     {
@@ -44,6 +55,20 @@ export default async function DashboardPage() {
       description: 'מתחילת השבוע',
       color: 'text-amber-600', bg: 'bg-amber-50',
     },
+    {
+      title: 'הכנסות היום',
+      value: fmtPrice(todayRevenue),
+      icon: Banknote,
+      description: 'תורים שלא בוטלו',
+      color: 'text-emerald-600', bg: 'bg-emerald-50',
+    },
+    {
+      title: 'הכנסות השבוע',
+      value: fmtPrice(weekRevenue),
+      icon: TrendingUp,
+      description: 'מתחילת השבוע',
+      color: 'text-violet-600', bg: 'bg-violet-50',
+    },
   ]
 
   return (
@@ -55,7 +80,7 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 xl:grid-cols-3 gap-4 max-w-2xl">
+      <div className="grid grid-cols-2 xl:grid-cols-3 gap-4 max-w-3xl">
         {stats.map(({ title, value, icon: Icon, description, color, bg }) => (
           <Card key={title} className="border-0 shadow-sm hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -65,7 +90,7 @@ export default async function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold text-slate-900">{value}</p>
+              <p className="text-2xl font-bold text-slate-900">{value}</p>
               <p className="text-xs text-slate-500 mt-1 leading-tight">{description}</p>
             </CardContent>
           </Card>

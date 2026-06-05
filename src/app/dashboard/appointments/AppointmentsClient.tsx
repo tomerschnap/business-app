@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { logActivity } from '@/lib/logActivity'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,19 +12,30 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Pencil, Trash2, CalendarDays, Clock, User, UserPlus, Calendar, AlignLeft, Timer, Loader2, History } from 'lucide-react'
+import { Plus, Pencil, Trash2, CalendarDays, Clock, User, UserPlus, Calendar, AlignLeft, Timer, Loader2, History, Phone, Banknote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type Appointment = { id: string; customer_name: string; date: string; time: string; duration: string; notes: string; created_at: string }
+type Appointment = {
+  id: string; customer_name: string; date: string; time: string; duration: string
+  notes: string; phone: string; status: string; price: number; created_at: string
+}
 type Customer = { id: string; name: string }
 type DayHours = { enabled: boolean; open: string; close: string }
 type WorkingHours = Record<string, DayHours>
 
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 const DURATIONS = ['15 דקות', '30 דקות', '45 דקות', 'שעה']
+const STATUSES = ['ממתין', 'אושר', 'בוטל', 'הגיע', 'לא הגיע']
 const ITEM_H = 44
 
-// All 15-min slots 7:00-22:00
+const STATUS_STYLE: Record<string, string> = {
+  'ממתין':    'bg-amber-100 text-amber-700 border-amber-200',
+  'אושר':     'bg-blue-100 text-blue-700 border-blue-200',
+  'בוטל':     'bg-red-100 text-red-600 border-red-200',
+  'הגיע':     'bg-green-100 text-green-700 border-green-200',
+  'לא הגיע':  'bg-slate-100 text-slate-500 border-slate-200',
+}
+
 const ALL_TIME_SLOTS: string[] = (() => {
   const s: string[] = []
   for (let h = 7; h <= 22; h++)
@@ -34,85 +46,63 @@ const ALL_TIME_SLOTS: string[] = (() => {
   return s
 })()
 
-function timeToMinutes(t: string): number {
-  const [h, m] = t.split(':').map(Number)
-  return h * 60 + m
+function timeToMinutes(t: string) {
+  const [h, m] = t.split(':').map(Number); return h * 60 + m
 }
-
-function durationToMinutes(d: string): number {
+function durationToMinutes(d: string) {
   if (d === 'שעה') return 60
-  const match = d.match(/(\d+)/)
-  return match ? parseInt(match[1]) : 30
+  const m = d.match(/(\d+)/); return m ? parseInt(m[1]) : 30
 }
-
 function getSlotsForDate(date: string, wh: WorkingHours | null): string[] {
   if (!wh || !date) return ALL_TIME_SLOTS
-  const dow = new Date(date + 'T00:00:00').getDay()
-  const day = DAY_KEYS[dow]
-  const config = wh[day]
-  if (!config?.enabled) return []
-  return ALL_TIME_SLOTS.filter(t => t >= config.open && t <= config.close)
+  const day = DAY_KEYS[new Date(date + 'T00:00:00').getDay()]
+  const cfg = wh[day]
+  if (!cfg?.enabled) return []
+  return ALL_TIME_SLOTS.filter(t => t >= cfg.open && t <= cfg.close)
 }
 
-const emptyForm = { customer_name: '', date: '', time: '09:00', duration: '30 דקות', notes: '' }
+const emptyForm = { customer_name: '', date: '', time: '09:00', duration: '30 דקות', notes: '', phone: '', status: 'ממתין', price: '' }
 
 // ── Wheel Picker ──────────────────────────────────────────────────────────────
 function WheelPicker({ slots, value, onChange }: { slots: string[]; value: string; onChange: (v: string) => void }) {
   const ref = useRef<HTMLDivElement>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const VISIBLE = 5
-  const PAD = Math.floor(VISIBLE / 2) * ITEM_H
+  const debRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const VISIBLE = 5, PAD = Math.floor(VISIBLE / 2) * ITEM_H
 
-  const scrollToIndex = useCallback((idx: number, smooth = false) => {
+  const scrollTo = useCallback((idx: number, smooth = false) => {
     ref.current?.scrollTo({ top: Math.max(0, idx) * ITEM_H, behavior: smooth ? 'smooth' : 'instant' })
   }, [])
 
   useEffect(() => {
     const idx = slots.indexOf(value)
-    scrollToIndex(idx >= 0 ? idx : 0, false)
+    scrollTo(idx >= 0 ? idx : 0, false)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots])
 
   function handleScroll() {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
+    if (debRef.current) clearTimeout(debRef.current)
+    debRef.current = setTimeout(() => {
       if (!ref.current) return
-      const idx = Math.round(ref.current.scrollTop / ITEM_H)
-      const clamped = Math.max(0, Math.min(slots.length - 1, idx))
-      scrollToIndex(clamped, true)
-      if (slots[clamped]) onChange(slots[clamped])
+      const idx = Math.max(0, Math.min(slots.length - 1, Math.round(ref.current.scrollTop / ITEM_H)))
+      scrollTo(idx, true)
+      if (slots[idx]) onChange(slots[idx])
     }, 80)
   }
 
-  if (slots.length === 0) {
-    return (
-      <div className="flex items-center justify-center py-10 text-slate-400 text-sm">
-        אין שעות פנויות ביום זה
-      </div>
-    )
-  }
+  if (slots.length === 0)
+    return <div className="flex items-center justify-center py-10 text-slate-400 text-sm">אין שעות פנויות ביום זה</div>
 
   return (
     <div className="relative w-full select-none" style={{ height: VISIBLE * ITEM_H }}>
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10"
-        style={{ height: PAD, background: 'linear-gradient(to bottom, white 30%, transparent)' }} />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10"
-        style={{ height: PAD, background: 'linear-gradient(to top, white 30%, transparent)' }} />
-      <div className="pointer-events-none absolute inset-x-0 z-0 rounded-xl border border-primary/20"
-        style={{ top: PAD, height: ITEM_H, background: 'hsl(var(--primary) / 0.06)' }} />
-      <div ref={ref} onScroll={handleScroll}
-        className="absolute inset-0 overflow-y-scroll"
-        style={{ scrollSnapType: 'y mandatory', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10" style={{ height: PAD, background: 'linear-gradient(to bottom, white 30%, transparent)' }} />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10" style={{ height: PAD, background: 'linear-gradient(to top, white 30%, transparent)' }} />
+      <div className="pointer-events-none absolute inset-x-0 z-0 rounded-xl border border-primary/20" style={{ top: PAD, height: ITEM_H, background: 'hsl(var(--primary) / 0.06)' }} />
+      <div ref={ref} onScroll={handleScroll} className="absolute inset-0 overflow-y-scroll" style={{ scrollSnapType: 'y mandatory', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
         <div style={{ height: PAD }} />
         {slots.map(slot => (
-          <div key={slot}
-            style={{ scrollSnapAlign: 'center', height: ITEM_H }}
-            className={cn(
-              'flex items-center justify-center text-base transition-all duration-150 cursor-pointer',
-              slot === value ? 'font-bold text-primary text-lg' : 'text-slate-500'
-            )}
-            onClick={() => { scrollToIndex(slots.indexOf(slot), true); onChange(slot) }}
-          >
+          <div key={slot} style={{ scrollSnapAlign: 'center', height: ITEM_H }}
+            className={cn('flex items-center justify-center text-base transition-all duration-150 cursor-pointer', slot === value ? 'font-bold text-primary text-lg' : 'text-slate-500')}
+            onClick={() => { scrollTo(slots.indexOf(slot), true); onChange(slot) }}>
             {slot}
           </div>
         ))}
@@ -127,6 +117,23 @@ function StatusBadge({ date }: { date: string }) {
   if (date < today) return <Badge variant="secondary" className="text-xs font-normal">עבר</Badge>
   if (date === today) return <Badge className="text-xs bg-green-500 hover:bg-green-600 font-normal">היום</Badge>
   return <Badge variant="outline" className="text-xs font-normal text-blue-600 border-blue-200">קרוב</Badge>
+}
+
+// Inline status select — styled as a colored badge
+function StatusSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const style = STATUS_STYLE[value] ?? STATUS_STYLE['ממתין']
+  return (
+    <Select value={value} onValueChange={v => onChange(v ?? value)}>
+      <SelectTrigger className={cn('h-6 text-xs px-2 rounded-full border w-[90px] gap-1 focus:ring-0 shadow-none font-medium', style)}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {STATUSES.map(s => (
+          <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -148,27 +155,21 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
 
-  // ── Compute blocked + available slots ────────────────────────────────────────
+  // ── Available slots ──────────────────────────────────────────────────────────
   const todayStr = new Date().toISOString().split('T')[0]
 
-  // Block slots that fall within the span of any existing appointment on this date
   const blockedByOverlap = new Set<string>()
   appointments
-    .filter(a => a.date === form.date && a.id !== editing?.id)
+    .filter(a => a.date === form.date && a.id !== editing?.id && a.status !== 'בוטל')
     .forEach(a => {
-      const startMin = timeToMinutes(a.time)
-      const endMin = startMin + durationToMinutes(a.duration || '30 דקות')
+      const start = timeToMinutes(a.time)
+      const end = start + durationToMinutes(a.duration || '30 דקות')
       ALL_TIME_SLOTS.forEach(slot => {
-        const slotMin = timeToMinutes(slot)
-        // Block the slot if it falls inside [start, end) of an existing appointment
-        if (slotMin >= startMin && slotMin < endMin) blockedByOverlap.add(slot)
+        if (timeToMinutes(slot) >= start && timeToMinutes(slot) < end) blockedByOverlap.add(slot)
       })
     })
 
-  // Block past slots when today is selected
-  const nowMinutes = form.date === todayStr
-    ? new Date().getHours() * 60 + new Date().getMinutes()
-    : -1
+  const nowMinutes = form.date === todayStr ? new Date().getHours() * 60 + new Date().getMinutes() : -1
 
   const availableSlots = getSlotsForDate(form.date, workingHours).filter(slot => {
     if (blockedByOverlap.has(slot)) return false
@@ -178,17 +179,13 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
 
   const dayClosed = form.date ? getSlotsForDate(form.date, workingHours).length === 0 && workingHours !== null : false
 
-  // When date changes, snap time to first available slot if current is no longer available
   useEffect(() => {
-    if (form.date && availableSlots.length > 0 && !availableSlots.includes(form.time)) {
+    if (form.date && availableSlots.length > 0 && !availableSlots.includes(form.time))
       setForm(f => ({ ...f, time: availableSlots[0] }))
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.date])
 
-  function set<K extends keyof typeof emptyForm>(k: K, v: string) {
-    setForm(f => ({ ...f, [k]: v }))
-  }
+  function set<K extends keyof typeof emptyForm>(k: K, v: string) { setForm(f => ({ ...f, [k]: v })) }
 
   function openAdd() {
     setEditing(null); setForm(emptyForm)
@@ -198,7 +195,11 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
 
   function openEdit(a: Appointment) {
     setEditing(a)
-    setForm({ customer_name: a.customer_name, date: a.date, time: a.time || '09:00', duration: a.duration || '30 דקות', notes: a.notes || '' })
+    setForm({
+      customer_name: a.customer_name, date: a.date, time: a.time || '09:00',
+      duration: a.duration || '30 דקות', notes: a.notes || '', phone: a.phone || '',
+      status: a.status || 'ממתין', price: a.price ? String(a.price) : '',
+    })
     setCustomerMode(customers.some(c => c.name === a.customer_name) ? 'select' : 'new')
     setOpen(true)
   }
@@ -206,10 +207,20 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
   async function autoSaveCustomer(name: string) {
     const trimmed = name.trim()
     if (!trimmed) return
-    const alreadyExists = customers.some(c => c.name.toLowerCase() === trimmed.toLowerCase())
-    if (alreadyExists) return
+    if (customers.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) return
     const { data } = await supabase.from('customers').insert({ name: trimmed }).select('id, name').single()
-    if (data) setCustomers(cs => [...cs, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
+    if (data) {
+      setCustomers(cs => [...cs, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
+      await logActivity('לקוח חדש', `שם: ${trimmed} (נוסף אוטומטית)`)
+    }
+  }
+
+  async function handleStatusChange(id: string, newStatus: string) {
+    const appt = appointments.find(a => a.id === id)
+    const { data, error } = await supabase.from('appointments').update({ status: newStatus }).eq('id', id).select().single()
+    if (error) { toast.error(error.message); return }
+    setAppointments(as => as.map(a => a.id === id ? data : a).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)))
+    await logActivity('עדכון סטטוס', `${appt?.customer_name || ''} — ${appt?.date || ''} ${appt?.time || ''}: ${newStatus}`)
   }
 
   async function handleSave() {
@@ -219,40 +230,41 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
     if (dayClosed) return toast.error('העסק סגור ביום זה')
     if (!availableSlots.includes(form.time) && availableSlots.length > 0)
       return toast.error('השעה הנבחרת אינה פנויה — בחר שעה אחרת')
-
     setLoading(true)
-
-    // Auto-save new customer
     if (customerMode === 'new') await autoSaveCustomer(form.customer_name)
-
     const payload = {
-      customer_name: form.customer_name.trim(),
-      date: form.date,
-      time: form.time,
-      duration: form.duration,
-      notes: form.notes,
+      customer_name: form.customer_name.trim(), date: form.date, time: form.time,
+      duration: form.duration, notes: form.notes, phone: form.phone,
+      status: form.status, price: parseFloat(form.price) || 0,
     }
     if (editing) {
       const { data, error } = await supabase.from('appointments').update(payload).eq('id', editing.id).select().single()
       if (error) { toast.error(error.message); setLoading(false); return }
       setAppointments(as => as.map(a => a.id === editing.id ? data : a).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)))
-      toast.success('התור עודכן'); setOpen(false)
+      toast.success('התור עודכן')
+      await logActivity('עדכון תור', `${payload.customer_name} — ${payload.date} ${payload.time}`)
     } else {
       const { data, error } = await supabase.from('appointments').insert(payload).select().single()
       if (error) { toast.error(error.message); setLoading(false); return }
       setAppointments(as => [...as, data].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)))
-      toast.success('התור נקבע בהצלחה'); setOpen(false)
+      toast.success('התור נקבע בהצלחה')
+      await logActivity('תור חדש', `${payload.customer_name} — ${payload.date} ${payload.time}`)
     }
+    setOpen(false)
     setLoading(false)
   }
 
   async function handleDelete(id: string) {
+    const appt = appointments.find(a => a.id === id)
     const { error } = await supabase.from('appointments').delete().eq('id', id)
-    if (error) toast.error(error.message)
-    else { setAppointments(as => as.filter(a => a.id !== id)); toast.success('התור נמחק') }
+    if (error) { toast.error(error.message); return }
+    setAppointments(as => as.filter(a => a.id !== id))
+    toast.success('התור נמחק')
+    await logActivity('תור נמחק', `${appt?.customer_name || ''} — ${appt?.date || ''} ${appt?.time || ''}`)
     setDeleteId(null)
   }
 
+  // ── Split upcoming / past ────────────────────────────────────────────────────
   const today2 = new Date().toISOString().split('T')[0]
   const upcoming = appointments.filter(a => a.date >= today2)
   const past = appointments.filter(a => a.date < today2).reverse()
@@ -262,17 +274,15 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
     const groups: { date: string; label: string; items: Appointment[] }[] = []
     for (const a of list) {
       const last = groups[groups.length - 1]
-      if (last && last.date === a.date) {
-        last.items.push(a)
-      } else {
-        const label = new Date(a.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })
-        groups.push({ date: a.date, label, items: [a] })
+      if (last && last.date === a.date) { last.items.push(a) } else {
+        groups.push({ date: a.date, label: new Date(a.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' }), items: [a] })
       }
     }
     return groups
   }
   const grouped = makeGroups(displayed)
 
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5 max-w-5xl">
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -286,9 +296,7 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
           <Button variant="outline" onClick={() => setShowHistory(h => !h)} className="gap-2">
             <History className="h-4 w-4" />
             היסטוריה
-            {past.length > 0 && (
-              <span className="bg-slate-200 text-slate-600 text-xs font-semibold rounded-full px-1.5 py-0.5 leading-none">{past.length}</span>
-            )}
+            {past.length > 0 && <span className="bg-slate-200 text-slate-600 text-xs font-semibold rounded-full px-1.5 py-0.5 leading-none">{past.length}</span>}
           </Button>
           <Button onClick={openAdd} className="gap-2 shadow-sm"><Plus className="h-4 w-4" /> קבע תור</Button>
         </div>
@@ -311,6 +319,8 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
                 <div className="flex-1 h-px bg-slate-200" />
                 <StatusBadge date={date} />
               </div>
+
+              {/* Desktop table */}
               <div className="hidden md:block rounded-xl bg-white overflow-hidden shadow-sm">
                 <Table>
                   <TableHeader>
@@ -318,17 +328,24 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
                       <TableHead className="font-semibold text-slate-700">לקוח</TableHead>
                       <TableHead className="font-semibold text-slate-700">שעה</TableHead>
                       <TableHead className="font-semibold text-slate-700">משך</TableHead>
-                      <TableHead className="font-semibold text-slate-700">הערות</TableHead>
+                      <TableHead className="font-semibold text-slate-700">מחיר</TableHead>
+                      <TableHead className="font-semibold text-slate-700">סטטוס</TableHead>
                       <TableHead className="text-left font-semibold text-slate-700">פעולות</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {items.map(a => (
                       <TableRow key={a.id} className="hover:bg-slate-50 transition-colors">
-                        <TableCell className="font-semibold text-slate-800">{a.customer_name}</TableCell>
+                        <TableCell>
+                          <p className="font-semibold text-slate-800">{a.customer_name}</p>
+                          {a.phone && <p className="text-xs text-slate-400 mt-0.5" dir="ltr">{a.phone}</p>}
+                        </TableCell>
                         <TableCell dir="ltr" className="text-right font-medium">{a.time}</TableCell>
                         <TableCell><Badge variant="secondary" className="font-normal text-xs">{a.duration || '30 דקות'}</Badge></TableCell>
-                        <TableCell className="text-slate-500 max-w-xs truncate">{a.notes || '—'}</TableCell>
+                        <TableCell className="text-slate-600 text-sm">{a.price ? `₪${a.price}` : '—'}</TableCell>
+                        <TableCell>
+                          <StatusSelect value={a.status || 'ממתין'} onChange={v => handleStatusChange(a.id, v)} />
+                        </TableCell>
                         <TableCell className="text-left">
                           <div className="flex gap-1 justify-end">
                             <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(a)}><Pencil className="h-3.5 w-3.5 text-slate-500" /></Button>
@@ -340,15 +357,22 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Mobile cards */}
               <div className="md:hidden space-y-2">
                 {items.map(a => (
                   <Card key={a.id} className="border-0 shadow-sm">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-slate-800">{a.customer_name}</p>
-                          <p className="text-sm text-slate-600 flex items-center gap-1.5 mt-1" dir="ltr">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <p className="font-semibold text-slate-800">{a.customer_name}</p>
+                            <StatusSelect value={a.status || 'ממתין'} onChange={v => handleStatusChange(a.id, v)} />
+                          </div>
+                          {a.phone && <p className="text-xs text-slate-500 flex items-center gap-1 mb-1" dir="ltr"><Phone className="h-3 w-3 shrink-0" />{a.phone}</p>}
+                          <p className="text-sm text-slate-600 flex items-center gap-1.5" dir="ltr">
                             <Clock className="h-3.5 w-3.5 shrink-0" />{a.time} · {a.duration || '30 דקות'}
+                            {a.price ? <span className="mr-2 font-medium text-slate-700">₪{a.price}</span> : null}
                           </p>
                           {a.notes && <p className="text-xs text-slate-400 mt-1.5">{a.notes}</p>}
                         </div>
@@ -371,31 +395,23 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
         <DialogContent className="sm:max-w-md p-0 overflow-hidden gap-0">
           <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-100">
             <div className="flex items-center gap-3">
-              <div className="bg-primary/10 rounded-xl p-2.5">
-                <Calendar className="h-5 w-5 text-primary" />
-              </div>
-              <DialogTitle className="text-lg font-bold">
-                {editing ? 'עריכת תור' : 'קביעת תור חדש'}
-              </DialogTitle>
+              <div className="bg-primary/10 rounded-xl p-2.5"><Calendar className="h-5 w-5 text-primary" /></div>
+              <DialogTitle className="text-lg font-bold">{editing ? 'עריכת תור' : 'קביעת תור חדש'}</DialogTitle>
             </div>
           </DialogHeader>
 
           <div className="px-6 py-5 space-y-5 max-h-[75vh] overflow-y-auto">
             {/* Customer */}
             <div className="space-y-3">
-              <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm">
-                <User className="h-4 w-4 text-slate-400" /> לקוח
-              </Label>
+              <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm"><User className="h-4 w-4 text-slate-400" /> לקוח</Label>
               {customers.length > 0 && (
                 <div className="flex rounded-lg border border-slate-200 overflow-hidden text-sm w-fit">
                   <button onClick={() => { setCustomerMode('select'); set('customer_name', '') }}
-                    className={cn('flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors',
-                      customerMode === 'select' ? 'bg-primary text-white' : 'text-slate-500 hover:bg-slate-50')}>
+                    className={cn('flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors', customerMode === 'select' ? 'bg-primary text-white' : 'text-slate-500 hover:bg-slate-50')}>
                     <User className="h-3.5 w-3.5" /> לקוח קיים
                   </button>
                   <button onClick={() => { setCustomerMode('new'); set('customer_name', '') }}
-                    className={cn('flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors',
-                      customerMode === 'new' ? 'bg-primary text-white' : 'text-slate-500 hover:bg-slate-50')}>
+                    className={cn('flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors', customerMode === 'new' ? 'bg-primary text-white' : 'text-slate-500 hover:bg-slate-50')}>
                     <UserPlus className="h-3.5 w-3.5" /> חדש
                   </button>
                 </div>
@@ -406,72 +422,73 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
                   <SelectContent>{customers.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
                 </Select>
               ) : (
-                <Input value={form.customer_name} onChange={e => set('customer_name', e.target.value)}
-                  placeholder="הקלד שם לקוח..." className="h-11 text-base" autoFocus={customerMode === 'new'} />
+                <Input value={form.customer_name} onChange={e => set('customer_name', e.target.value)} placeholder="הקלד שם לקוח..." className="h-11 text-base" autoFocus={customerMode === 'new'} />
               )}
+            </div>
+
+            {/* Phone */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm"><Phone className="h-4 w-4 text-slate-400" /> טלפון</Label>
+              <Input dir="ltr" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="050-0000000" className="h-11 text-base text-left" />
             </div>
 
             {/* Date */}
             <div className="space-y-2">
-              <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm">
-                <Calendar className="h-4 w-4 text-slate-400" /> תאריך
-              </Label>
-              <Input type="date" value={form.date} dir="ltr" className="h-11 text-base text-left"
-                onChange={e => set('date', e.target.value)} />
+              <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm"><Calendar className="h-4 w-4 text-slate-400" /> תאריך</Label>
+              <Input type="date" value={form.date} dir="ltr" className="h-11 text-base text-left" onChange={e => set('date', e.target.value)} />
             </div>
 
             {/* Time wheel */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm">
                 <Clock className="h-4 w-4 text-slate-400" /> שעה
-                {form.date && workingHours && availableSlots.length > 0 && (
-                  <span className="text-xs font-normal text-slate-400 mr-1">
-                    ({availableSlots[0]} – {availableSlots[availableSlots.length - 1]})
-                  </span>
+                {form.date && availableSlots.length > 0 && (
+                  <span className="text-xs font-normal text-slate-400 mr-1">({availableSlots[0]} – {availableSlots[availableSlots.length - 1]})</span>
                 )}
               </Label>
               <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
-                <WheelPicker
-                  key={form.date}
-                  slots={availableSlots.length > 0 ? availableSlots : (form.date ? [] : ALL_TIME_SLOTS)}
-                  value={form.time}
-                  onChange={v => set('time', v)}
-                />
+                <WheelPicker key={form.date} slots={availableSlots.length > 0 ? availableSlots : (form.date ? [] : ALL_TIME_SLOTS)} value={form.time} onChange={v => set('time', v)} />
               </div>
-              {form.date && dayClosed && (
-                <p className="text-xs text-red-500">העסק סגור ביום זה — לא ניתן לקבוע תור</p>
-              )}
-              {form.date && !dayClosed && availableSlots.length === 0 && (
-                <p className="text-xs text-amber-600">כל השעות ביום זה תפוסות</p>
-              )}
+              {form.date && dayClosed && <p className="text-xs text-red-500">העסק סגור ביום זה — לא ניתן לקבוע תור</p>}
+              {form.date && !dayClosed && availableSlots.length === 0 && <p className="text-xs text-amber-600">כל השעות ביום זה תפוסות</p>}
             </div>
 
             {/* Duration */}
             <div className="space-y-2">
-              <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm">
-                <Timer className="h-4 w-4 text-slate-400" /> משך הפגישה
-              </Label>
+              <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm"><Timer className="h-4 w-4 text-slate-400" /> משך הפגישה</Label>
               <div className="flex gap-2 flex-wrap">
                 {DURATIONS.map(d => (
                   <button key={d} onClick={() => set('duration', d)}
-                    className={cn('px-4 py-2 rounded-lg text-sm font-medium border transition-all',
-                      form.duration === d
-                        ? 'bg-primary text-white border-primary shadow-sm'
-                        : 'bg-white text-slate-600 border-slate-200 hover:border-primary/40 hover:bg-primary/5'
-                    )}>
+                    className={cn('px-4 py-2 rounded-lg text-sm font-medium border transition-all', form.duration === d ? 'bg-primary text-white border-primary shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-primary/40 hover:bg-primary/5')}>
                     {d}
                   </button>
                 ))}
               </div>
             </div>
 
+            {/* Status */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm">סטטוס</Label>
+              <div className="flex gap-2 flex-wrap">
+                {STATUSES.map(s => (
+                  <button key={s} onClick={() => set('status', s)}
+                    className={cn('px-3 py-1.5 rounded-full text-xs font-medium border transition-all', form.status === s ? STATUS_STYLE[s] + ' ring-2 ring-offset-1 ring-primary/30' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50')}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Price */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm"><Banknote className="h-4 w-4 text-slate-400" /> מחיר (₪)</Label>
+              <Input type="number" min="0" step="1" dir="ltr" value={form.price} onChange={e => set('price', e.target.value)} placeholder="0" className="h-11 text-base text-left" />
+            </div>
+
             {/* Notes */}
             <div className="space-y-2">
-              <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm">
-                <AlignLeft className="h-4 w-4 text-slate-400" /> הערות
-              </Label>
-              <Input value={form.notes} onChange={e => set('notes', e.target.value)}
-                placeholder="הערות אופציונליות..." className="h-11 text-base" />
+              <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm"><AlignLeft className="h-4 w-4 text-slate-400" /> הערות</Label>
+              <Input value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="הערות אופציונליות..." className="h-11 text-base" />
             </div>
           </div>
 
@@ -479,9 +496,7 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
             <Button onClick={handleSave} disabled={loading} className="flex-1 h-11 text-base font-semibold shadow-sm">
               {loading ? <><Loader2 className="h-4 w-4 animate-spin ml-2" />שומר...</> : editing ? 'שמור שינויים' : 'קבע תור'}
             </Button>
-            <DialogClose>
-              <Button variant="outline" type="button" className="h-11 px-5">ביטול</Button>
-            </DialogClose>
+            <DialogClose><Button variant="outline" type="button" className="h-11 px-5">ביטול</Button></DialogClose>
           </div>
         </DialogContent>
       </Dialog>
