@@ -8,11 +8,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Store, Save, Loader2, Building2, Phone, MapPin, FileText, Image as ImageIcon, Globe, Clock } from 'lucide-react'
+import { Store, Save, Loader2, Building2, Phone, MapPin, FileText, Image as ImageIcon, Globe, Clock, CalendarOff, Plus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type DayHours = { enabled: boolean; open: string; close: string }
 type WorkingHours = Record<string, DayHours>
+
+type BlockedDate = { id: string; date: string; reason: string }
 
 type Profile = {
   id?: string
@@ -57,9 +59,10 @@ const emptyProfile = (userId: string): Profile => ({
   working_hours: DEFAULT_WORKING_HOURS,
 })
 
-export default function BusinessClient({ initialProfile, userId }: {
+export default function BusinessClient({ initialProfile, userId, initialBlockedDates }: {
   initialProfile: Profile | null
   userId: string
+  initialBlockedDates: BlockedDate[]
 }) {
   const supabase = createClient()
   const [form, setForm] = useState<Profile>({
@@ -69,6 +72,10 @@ export default function BusinessClient({ initialProfile, userId }: {
       : DEFAULT_WORKING_HOURS,
   })
   const [loading, setLoading] = useState(false)
+  const [blockedDates, setBlockedDates] = useState<BlockedDate[]>(initialBlockedDates)
+  const [newDate, setNewDate] = useState('')
+  const [newReason, setNewReason] = useState('')
+  const [addingDate, setAddingDate] = useState(false)
 
   function setField(field: keyof Profile, value: string) {
     setForm(f => ({ ...f, [field]: value }))
@@ -111,6 +118,22 @@ export default function BusinessClient({ initialProfile, userId }: {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function addBlockedDate() {
+    if (!newDate) return toast.error('נא לבחור תאריך')
+    if (blockedDates.some(b => b.date === newDate)) return toast.error('תאריך זה כבר חסום')
+    setAddingDate(true)
+    const { data, error } = await supabase.from('blocked_dates').insert({ date: newDate, reason: newReason }).select().single()
+    if (error) toast.error(error.message)
+    else { setBlockedDates(bs => [...bs, data].sort((a, b) => a.date.localeCompare(b.date))); setNewDate(''); setNewReason(''); toast.success('התאריך נחסם') }
+    setAddingDate(false)
+  }
+
+  async function removeBlockedDate(id: string) {
+    const { error } = await supabase.from('blocked_dates').delete().eq('id', id)
+    if (error) toast.error(error.message)
+    else { setBlockedDates(bs => bs.filter(b => b.id !== id)); toast.success('החסימה הוסרה') }
   }
 
   const wh = form.working_hours ?? DEFAULT_WORKING_HOURS
@@ -231,6 +254,53 @@ export default function BusinessClient({ initialProfile, userId }: {
               </div>
             )
           })}
+        </CardContent>
+      </Card>
+
+      {/* Blocked dates */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
+            <CalendarOff className="h-4 w-4 text-slate-400" /> תאריכים חסומים
+          </CardTitle>
+          <CardDescription>חסום תאריכים שבהם לא ניתן לקבוע תורים (חופשות, חגים, וכד׳)</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2 flex-wrap items-end">
+            <div className="flex-1 min-w-[150px]">
+              <Label className="text-xs text-slate-500 mb-1 block">תאריך</Label>
+              <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
+                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" dir="ltr" />
+            </div>
+            <div className="flex-1 min-w-[150px]">
+              <Label className="text-xs text-slate-500 mb-1 block">סיבה (אופציונלי)</Label>
+              <input type="text" value={newReason} onChange={e => setNewReason(e.target.value)} placeholder="חופשה, חג..."
+                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+            </div>
+            <Button onClick={addBlockedDate} disabled={addingDate} className="gap-1.5 h-9 shrink-0">
+              <Plus className="h-4 w-4" /> חסום תאריך
+            </Button>
+          </div>
+
+          {blockedDates.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-4">אין תאריכים חסומים</p>
+          ) : (
+            <div className="space-y-2">
+              {blockedDates.map(b => (
+                <div key={b.id} className="flex items-center justify-between gap-2 bg-slate-50 rounded-xl px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">
+                      {new Date(b.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                    </p>
+                    {b.reason && <p className="text-xs text-slate-500">{b.reason}</p>}
+                  </div>
+                  <button onClick={() => removeBlockedDate(b.id)} className="text-red-400 hover:text-red-600 transition-colors shrink-0">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

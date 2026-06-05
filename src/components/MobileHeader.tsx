@@ -5,8 +5,9 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
-import { Menu, X, Briefcase, LayoutDashboard, Users, CalendarDays, CalendarRange, LogOut, ShoppingBag, Store, Users2, ClipboardList } from 'lucide-react'
+import { Menu, X, Briefcase, LayoutDashboard, Users, CalendarDays, CalendarRange, LogOut, ShoppingBag, Store, Users2, ClipboardList, Scissors, BarChart2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import GlobalSearch from '@/components/GlobalSearch'
 
 const navItems = [
   { href: '/dashboard', label: 'סקירה כללית', icon: LayoutDashboard },
@@ -14,6 +15,8 @@ const navItems = [
   { href: '/dashboard/appointments', label: 'תורים', icon: CalendarDays },
   { href: '/dashboard/group', label: 'תורים קבוצתיים', icon: Users2 },
   { href: '/dashboard/orders', label: 'הזמנות', icon: ShoppingBag },
+  { href: '/dashboard/services', label: 'שירותים', icon: Scissors },
+  { href: '/dashboard/reports', label: 'דוחות', icon: BarChart2 },
   { href: '/dashboard/calendar', label: 'לוח שנה', icon: CalendarRange },
   { href: '/dashboard/activity', label: 'יומן פעולות', icon: ClipboardList },
   { href: '/dashboard/business', label: 'פרופיל עסק', icon: Store },
@@ -46,7 +49,7 @@ export default function MobileHeader({ userEmail }: { userEmail: string }) {
           </div>
           <span className="font-bold text-slate-800">{currentPage}</span>
         </div>
-        <div className="w-9" />
+        <GlobalSearch mobile />
       </header>
 
       {/* Overlay */}

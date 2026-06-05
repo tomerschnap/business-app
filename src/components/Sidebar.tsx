@@ -4,10 +4,11 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, Users, CalendarDays, CalendarRange, LogOut, Briefcase, ShoppingBag, Store, Users2, ClipboardList } from 'lucide-react'
+import { LayoutDashboard, Users, CalendarDays, CalendarRange, LogOut, Briefcase, ShoppingBag, Store, Users2, ClipboardList, Scissors, BarChart2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
+import GlobalSearch from '@/components/GlobalSearch'
 
 const navItems = [
   { href: '/dashboard', label: 'סקירה כללית', icon: LayoutDashboard },
@@ -15,6 +16,8 @@ const navItems = [
   { href: '/dashboard/appointments', label: 'תורים', icon: CalendarDays },
   { href: '/dashboard/group', label: 'תורים קבוצתיים', icon: Users2 },
   { href: '/dashboard/orders', label: 'הזמנות', icon: ShoppingBag },
+  { href: '/dashboard/services', label: 'שירותים', icon: Scissors },
+  { href: '/dashboard/reports', label: 'דוחות', icon: BarChart2 },
   { href: '/dashboard/calendar', label: 'לוח שנה', icon: CalendarRange },
   { href: '/dashboard/activity', label: 'יומן פעולות', icon: ClipboardList },
   { href: '/dashboard/business', label: 'פרופיל עסק', icon: Store },
@@ -43,8 +46,13 @@ export default function Sidebar({ userEmail }: { userEmail: string }) {
 
       <Separator />
 
+      {/* Global Search */}
+      <div className="px-3 pt-3 pb-1">
+        <GlobalSearch />
+      </div>
+
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href
           return (

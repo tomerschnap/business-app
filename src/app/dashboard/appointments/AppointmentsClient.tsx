@@ -12,7 +12,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Pencil, Trash2, CalendarDays, Clock, User, UserPlus, Calendar, AlignLeft, Timer, Loader2, History, Phone, Banknote } from 'lucide-react'
+import { Plus, Pencil, Trash2, CalendarDays, Clock, User, UserPlus, Calendar, AlignLeft, Timer, Loader2, History, Phone, Banknote, Download, Scissors } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { cn } from '@/lib/utils'
 
 type Appointment = {
@@ -20,6 +21,7 @@ type Appointment = {
   notes: string; phone: string; status: string; price: number; created_at: string
 }
 type Customer = { id: string; name: string }
+type Service = { id: string; name: string; price: number; duration: string }
 type DayHours = { enabled: boolean; open: string; close: string }
 type WorkingHours = Record<string, DayHours>
 
@@ -137,10 +139,12 @@ function StatusSelect({ value, onChange }: { value: string; onChange: (v: string
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function AppointmentsClient({ initialAppointments, customers: initialCustomers, workingHours }: {
+export default function AppointmentsClient({ initialAppointments, customers: initialCustomers, workingHours, services, blockedDates }: {
   initialAppointments: Appointment[]
   customers: Customer[]
   workingHours: WorkingHours | null
+  services: Service[]
+  blockedDates: string[]
 }) {
   const supabase = createClient()
   const [appointments, setAppointments] = useState<Appointment[]>(
@@ -178,6 +182,7 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
   })
 
   const dayClosed = form.date ? getSlotsForDate(form.date, workingHours).length === 0 && workingHours !== null : false
+  const dayBlocked = form.date ? blockedDates.includes(form.date) : false
 
   useEffect(() => {
     if (form.date && availableSlots.length > 0 && !availableSlots.includes(form.time))
@@ -227,6 +232,7 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
     if (!form.customer_name.trim()) return toast.error('נא להזין שם לקוח')
     if (!form.date) return toast.error('נא לבחור תאריך')
     if (!form.time) return toast.error('נא לבחור שעה')
+    if (dayBlocked) return toast.error('תאריך זה חסום — לא ניתן לקבוע תור')
     if (dayClosed) return toast.error('העסק סגור ביום זה')
     if (!availableSlots.includes(form.time) && availableSlots.length > 0)
       return toast.error('השעה הנבחרת אינה פנויה — בחר שעה אחרת')
@@ -264,6 +270,23 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
     setDeleteId(null)
   }
 
+  function exportToExcel() {
+    const rows = appointments.map(a => ({
+      לקוח: a.customer_name,
+      תאריך: a.date,
+      שעה: a.time,
+      משך: a.duration,
+      מחיר: a.price,
+      סטטוס: a.status,
+      טלפון: a.phone,
+      הערות: a.notes,
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'תורים')
+    XLSX.writeFile(wb, 'appointments.xlsx')
+  }
+
   // ── Split upcoming / past ────────────────────────────────────────────────────
   const today2 = new Date().toISOString().split('T')[0]
   const upcoming = appointments.filter(a => a.date >= today2)
@@ -292,7 +315,10 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
             {showHistory ? `${past.length} תורים בהיסטוריה` : `${upcoming.length} תורים קרובים`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={exportToExcel} className="gap-2">
+            <Download className="h-4 w-4" /> ייצא Excel
+          </Button>
           <Button variant="outline" onClick={() => setShowHistory(h => !h)} className="gap-2">
             <History className="h-4 w-4" />
             היסטוריה
@@ -426,6 +452,30 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
               )}
             </div>
 
+            {/* Service */}
+            {services.length > 0 && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm"><Scissors className="h-4 w-4 text-slate-400" /> שירות</Label>
+                <Select
+                  value=""
+                  onValueChange={v => {
+                    const svc = services.find(s => s.id === v)
+                    if (svc) {
+                      set('duration', svc.duration)
+                      set('price', String(svc.price || ''))
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-11 text-base"><SelectValue placeholder="בחר שירות (ממלא משך ומחיר)" /></SelectTrigger>
+                  <SelectContent>
+                    {services.map(s => (
+                      <SelectItem key={s.id} value={s.id}>{s.name} — {s.duration}{s.price ? ` · ₪${s.price}` : ''}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {/* Phone */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm"><Phone className="h-4 w-4 text-slate-400" /> טלפון</Label>
@@ -449,7 +499,8 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
               <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
                 <WheelPicker key={form.date} slots={availableSlots.length > 0 ? availableSlots : (form.date ? [] : ALL_TIME_SLOTS)} value={form.time} onChange={v => set('time', v)} />
               </div>
-              {form.date && dayClosed && <p className="text-xs text-red-500">העסק סגור ביום זה — לא ניתן לקבוע תור</p>}
+              {form.date && dayBlocked && <p className="text-xs text-red-500">תאריך זה חסום — לא ניתן לקבוע תור</p>}
+              {form.date && !dayBlocked && dayClosed && <p className="text-xs text-red-500">העסק סגור ביום זה — לא ניתן לקבוע תור</p>}
               {form.date && !dayClosed && availableSlots.length === 0 && <p className="text-xs text-amber-600">כל השעות ביום זה תפוסות</p>}
             </div>
 
