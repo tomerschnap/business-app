@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Store, Save, Loader2, Building2, Phone, MapPin, FileText, Image as ImageIcon, Globe, Clock, CalendarOff, Plus, Trash2 } from 'lucide-react'
+import { Store, Save, Loader2, Building2, Phone, MapPin, FileText, Image as ImageIcon, Globe, Clock, CalendarOff, Plus, Trash2, Mail } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type DayHours = { enabled: boolean; open: string; close: string }
@@ -21,6 +21,7 @@ type Profile = {
   user_id: string
   name: string
   phone: string
+  email: string
   address: string
   description: string
   logo_url: string
@@ -54,7 +55,7 @@ const HOUR_OPTIONS: string[] = (() => {
 })()
 
 const emptyProfile = (userId: string): Profile => ({
-  user_id: userId, name: '', phone: '', address: '',
+  user_id: userId, name: '', phone: '', email: '', address: '',
   description: '', logo_url: '', website: '',
   working_hours: DEFAULT_WORKING_HOURS,
 })
@@ -99,6 +100,7 @@ export default function BusinessClient({ initialProfile, userId, initialBlockedD
         user_id: userId,
         name: form.name,
         phone: form.phone,
+        email: form.email,
         address: form.address,
         description: form.description,
         logo_url: form.logo_url,
@@ -177,6 +179,12 @@ export default function BusinessClient({ initialProfile, userId, initialBlockedD
               <Label className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-slate-400" /> טלפון</Label>
               <Input dir="ltr" className="text-left" value={form.phone} onChange={e => setField('phone', e.target.value)} placeholder="050-0000000" />
             </div>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-slate-400" /> אימייל</Label>
+              <Input type="email" dir="ltr" className="text-left" value={form.email ?? ''} onChange={e => setField('email', e.target.value)} placeholder="business@example.com" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="flex items-center gap-1.5"><Globe className="h-3.5 w-3.5 text-slate-400" /> אתר אינטרנט</Label>
               <Input dir="ltr" className="text-left" value={form.website} onChange={e => setField('website', e.target.value)} placeholder="https://example.com" />

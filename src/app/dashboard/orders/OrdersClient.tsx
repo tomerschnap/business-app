@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Pencil, Trash2, ShoppingBag, CalendarDays, User, X, History } from 'lucide-react'
+import { Plus, Pencil, Trash2, ShoppingBag, CalendarDays, User, X, History, Scissors, Banknote } from 'lucide-react'
 
 type Order = {
   id: string
@@ -20,12 +20,15 @@ type Order = {
   title: string
   description: string
   notes: string
+  service_name: string
+  price: number
   created_at: string
 }
 type Customer = { id: string; name: string }
+type Service = { id: string; name: string; price: number; duration: string }
 type CustomerMode = 'select' | 'new'
 
-const emptyForm = { customer_name: '', date: '', title: '', description: '', notes: '' }
+const emptyForm = { customer_name: '', date: '', title: '', description: '', notes: '', service_name: '', price: '' }
 
 function StatusBadge({ date }: { date: string }) {
   const today = new Date().toISOString().split('T')[0]
@@ -34,9 +37,10 @@ function StatusBadge({ date }: { date: string }) {
   return <Badge variant="outline" className="text-xs font-normal text-blue-600 border-blue-200">קרוב</Badge>
 }
 
-export default function OrdersClient({ initialOrders, customers: initialCustomers }: {
+export default function OrdersClient({ initialOrders, customers: initialCustomers, services }: {
   initialOrders: Order[]
   customers: Customer[]
+  services: Service[]
 }) {
   const supabase = createClient()
   const [orders, setOrders] = useState<Order[]>(
@@ -72,16 +76,22 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
       title: o.title || '',
       description: o.description || '',
       notes: o.notes || '',
+      service_name: o.service_name || '',
+      price: o.price ? String(o.price) : '',
     })
     setCustomerMode(customers.some(c => c.name === o.customer_name) ? 'select' : 'new')
     setOpen(true)
   }
 
+  function handleServiceChange(serviceId: string | null) {
+    if (!serviceId) return
+    const svc = services.find(s => s.id === serviceId)
+    if (svc) setForm(f => ({ ...f, service_name: svc.name, price: String(svc.price || '') }))
+  }
+
   async function autoSaveCustomer(name: string) {
     const trimmed = name.trim()
-    if (!trimmed) return
-    const alreadyExists = customers.some(c => c.name.toLowerCase() === trimmed.toLowerCase())
-    if (alreadyExists) return
+    if (!trimmed || customers.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) return
     const { data } = await supabase.from('customers').insert({ name: trimmed }).select('id, name').single()
     if (data) setCustomers(cs => [...cs, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
   }
@@ -89,17 +99,19 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
   async function handleSave() {
     if (!form.customer_name) return toast.error('נא לבחור לקוח')
     if (!form.date) return toast.error('נא לבחור תאריך')
+    if (!form.service_name) return toast.error('נא לבחור שירות')
     setLoading(true)
 
-    // Auto-save new customer
     if (customerMode === 'new') await autoSaveCustomer(form.customer_name)
 
     const payload = {
       customer_name: form.customer_name,
       date: form.date,
-      title: form.title,
+      title: form.title || form.service_name,
       description: form.description,
       notes: form.notes,
+      service_name: form.service_name,
+      price: parseFloat(form.price) || 0,
     }
     if (editing) {
       const { data, error } = await supabase.from('orders').update(payload).eq('id', editing.id).select().single()
@@ -152,8 +164,9 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50 hover:bg-slate-50">
-              <TableHead className="font-semibold text-slate-700">כותרת</TableHead>
               <TableHead className="font-semibold text-slate-700">לקוח</TableHead>
+              <TableHead className="font-semibold text-slate-700">שירות</TableHead>
+              <TableHead className="font-semibold text-slate-700">מחיר</TableHead>
               <TableHead className="font-semibold text-slate-700">תאריך</TableHead>
               <TableHead className="font-semibold text-slate-700">סטטוס</TableHead>
               <TableHead className="text-left font-semibold text-slate-700">פעולות</TableHead>
@@ -162,7 +175,7 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
           <TableBody>
             {displayed.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-14 text-slate-400">
+                <TableCell colSpan={6} className="text-center py-14 text-slate-400">
                   <ShoppingBag className="h-10 w-10 mx-auto mb-3 opacity-20" />
                   <p className="font-medium">{showHistory ? 'אין הזמנות בהיסטוריה' : 'אין הזמנות קרובות'}</p>
                   {!showHistory && <p className="text-sm">הוסף את ההזמנה הראשונה</p>}
@@ -170,8 +183,13 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
               </TableRow>
             ) : displayed.map(o => (
               <TableRow key={o.id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => setDetailOrder(o)}>
-                <TableCell className="font-semibold text-slate-800">{o.title || '—'}</TableCell>
-                <TableCell className="text-slate-600">{o.customer_name}</TableCell>
+                <TableCell className="font-semibold text-slate-800">{o.customer_name}</TableCell>
+                <TableCell>
+                  {o.service_name
+                    ? <Badge variant="secondary" className="font-normal text-xs gap-1"><Scissors className="h-3 w-3" />{o.service_name}</Badge>
+                    : <span className="text-slate-400">—</span>}
+                </TableCell>
+                <TableCell className="text-slate-600 font-medium">{o.price ? `₪${o.price}` : '—'}</TableCell>
                 <TableCell>{new Date(o.date + 'T00:00:00').toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' })}</TableCell>
                 <TableCell><StatusBadge date={o.date} /></TableCell>
                 <TableCell className="text-left">
@@ -202,18 +220,21 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
             <CardContent className="p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  {/* Top: title */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-bold text-slate-900">{o.title || '(ללא כותרת)'}</p>
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <p className="font-bold text-slate-900">{o.title || o.service_name || '(ללא כותרת)'}</p>
                     <StatusBadge date={o.date} />
                   </div>
-                  {/* Middle: date */}
-                  <p className="text-sm text-slate-600 mt-1 flex items-center gap-1.5">
+                  {o.service_name && (
+                    <p className="text-xs text-slate-500 flex items-center gap-1 mb-1">
+                      <Scissors className="h-3 w-3 shrink-0" />{o.service_name}
+                      {o.price ? <span className="font-medium text-slate-700 mr-1">· ₪{o.price}</span> : null}
+                    </p>
+                  )}
+                  <p className="text-sm text-slate-600 flex items-center gap-1.5">
                     <CalendarDays className="h-3.5 w-3.5 shrink-0" />
                     {new Date(o.date + 'T00:00:00').toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </p>
-                  {/* Bottom: customer name */}
-                  <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1">
+                  <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
                     <User className="h-3 w-3 shrink-0" />{o.customer_name}
                   </p>
                 </div>
@@ -236,14 +257,13 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setDetailOrder(null)}>
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
           <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm space-y-4" onClick={e => e.stopPropagation()}>
-            {/* Header */}
             <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="bg-amber-100 rounded-xl p-2">
+              <div className="flex items-center gap-3">
+                <div className="bg-amber-100 rounded-xl p-2.5">
                   <ShoppingBag className="h-5 w-5 text-amber-600" />
                 </div>
                 <div>
-                  <p className="font-bold text-lg text-slate-900 leading-tight">{detailOrder.title || '(ללא כותרת)'}</p>
+                  <p className="font-bold text-lg text-slate-900 leading-tight">{detailOrder.title || detailOrder.service_name || '(ללא כותרת)'}</p>
                   <StatusBadge date={detailOrder.date} />
                 </div>
               </div>
@@ -251,16 +271,27 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            {/* Details */}
-            <div className="space-y-2 text-sm text-slate-600">
-              <p className="flex items-center gap-2">
-                <CalendarDays className="h-4 w-4 text-slate-400 shrink-0" />
-                {new Date(detailOrder.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-              </p>
+            <div className="space-y-2.5 text-sm text-slate-600">
               <p className="flex items-center gap-2">
                 <User className="h-4 w-4 text-slate-400 shrink-0" />
                 {detailOrder.customer_name}
               </p>
+              <p className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-slate-400 shrink-0" />
+                {new Date(detailOrder.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+              {detailOrder.service_name && (
+                <p className="flex items-center gap-2">
+                  <Scissors className="h-4 w-4 text-slate-400 shrink-0" />
+                  {detailOrder.service_name}
+                </p>
+              )}
+              {detailOrder.price > 0 && (
+                <p className="flex items-center gap-2 font-semibold text-slate-800">
+                  <Banknote className="h-4 w-4 text-slate-400 shrink-0" />
+                  ₪{detailOrder.price}
+                </p>
+              )}
               {detailOrder.description && (
                 <div className="pt-1">
                   <p className="text-xs font-semibold text-slate-500 mb-1">תיאור</p>
@@ -274,7 +305,6 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
                 </div>
               )}
             </div>
-            {/* Actions */}
             <div className="flex gap-2 pt-1">
               <Button className="flex-1" onClick={() => { setDetailOrder(null); openEdit(detailOrder) }}>
                 <Pencil className="h-4 w-4 ml-1" /> עריכה
@@ -287,66 +317,118 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
 
       {/* Add/Edit dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>{editing ? 'עריכת הזמנה' : 'הוספת הזמנה'}</DialogTitle></DialogHeader>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingBag className="h-5 w-5 text-primary" />
+              {editing ? 'עריכת הזמנה' : 'הזמנה חדשה'}
+            </DialogTitle>
+          </DialogHeader>
           <div className="space-y-4 py-2">
             {/* Customer */}
             <div className="space-y-2">
-              <Label>לקוח *</Label>
+              <Label className="font-semibold text-slate-700">לקוח *</Label>
               {customers.length > 0 && (
-                <div className="flex rounded-lg overflow-hidden border border-slate-200 mb-2">
+                <div className="flex rounded-lg overflow-hidden border border-slate-200 mb-2 w-fit text-sm">
                   <button type="button"
                     onClick={() => { setCustomerMode('select'); setForm(f => ({ ...f, customer_name: '' })) }}
-                    className={`flex-1 py-1.5 text-sm font-medium transition-colors ${customerMode === 'select' ? 'bg-primary text-primary-foreground' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                    className={`px-3 py-1.5 font-medium transition-colors ${customerMode === 'select' ? 'bg-primary text-white' : 'text-slate-500 hover:bg-slate-50'}`}
                   >לקוח קיים</button>
                   <button type="button"
                     onClick={() => { setCustomerMode('new'); setForm(f => ({ ...f, customer_name: '' })) }}
-                    className={`flex-1 py-1.5 text-sm font-medium transition-colors ${customerMode === 'new' ? 'bg-primary text-primary-foreground' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                    className={`px-3 py-1.5 font-medium transition-colors ${customerMode === 'new' ? 'bg-primary text-white' : 'text-slate-500 hover:bg-slate-50'}`}
                   >חדש</button>
                 </div>
               )}
               {customerMode === 'select' && customers.length > 0 ? (
                 <Select value={form.customer_name} onValueChange={v => setForm(f => ({ ...f, customer_name: v ?? '' }))}>
-                  <SelectTrigger><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
                   <SelectContent>{customers.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
                 </Select>
               ) : (
-                <Input value={form.customer_name} onChange={e => setForm(f => ({ ...f, customer_name: e.target.value }))} placeholder="שם הלקוח" />
+                <Input value={form.customer_name} onChange={e => setForm(f => ({ ...f, customer_name: e.target.value }))} placeholder="שם הלקוח" className="h-11" />
               )}
             </div>
-            {/* Title */}
+
+            {/* Service — required */}
             <div className="space-y-2">
-              <Label>כותרת</Label>
-              <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="כותרת ההזמנה..." />
+              <Label className="font-semibold text-slate-700 flex items-center gap-2">
+                <Scissors className="h-4 w-4 text-slate-400" /> שירות *
+              </Label>
+              {services.length === 0 ? (
+                <p className="text-sm text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                  אין שירותים מוגדרים — הוסף שירותים בעמוד <strong>שירותים</strong> תחילה
+                </p>
+              ) : (
+                <Select
+                  value={services.find(s => s.name === form.service_name)?.id ?? ''}
+                  onValueChange={handleServiceChange}
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="בחר שירות" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {services.map(s => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}{s.price ? ` · ₪${s.price}` : ''}{s.duration ? ` · ${s.duration}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
+
+            {/* Price — auto-filled, editable */}
+            <div className="space-y-2">
+              <Label className="font-semibold text-slate-700 flex items-center gap-2">
+                <Banknote className="h-4 w-4 text-slate-400" /> מחיר (₪)
+              </Label>
+              <Input type="number" min="0" dir="ltr" value={form.price}
+                onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
+                placeholder="מתמלא אוטומטית מהשירות" className="h-11 text-left" />
+            </div>
+
             {/* Date */}
             <div className="space-y-2">
-              <Label>תאריך *</Label>
-              <Input type="date" value={form.date} dir="ltr" className="text-left" onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+              <Label className="font-semibold text-slate-700 flex items-center gap-2">
+                <CalendarDays className="h-4 w-4 text-slate-400" /> תאריך *
+              </Label>
+              <Input type="date" value={form.date} dir="ltr" className="h-11 text-left"
+                onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
             </div>
+
+            {/* Title (optional override) */}
+            <div className="space-y-2">
+              <Label className="font-semibold text-slate-700">כותרת <span className="font-normal text-slate-400">(אופציונלי)</span></Label>
+              <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                placeholder="ברירת מחדל: שם השירות" className="h-11" />
+            </div>
+
             {/* Description */}
             <div className="space-y-2">
-              <Label>תיאור</Label>
+              <Label className="font-semibold text-slate-700">תיאור</Label>
               <textarea
                 value={form.description}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                placeholder="תיאור מפורט של ההזמנה..."
+                placeholder="תיאור מפורט..."
                 rows={3}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
               />
             </div>
+
             {/* Notes */}
             <div className="space-y-2">
-              <Label>הערות</Label>
-              <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="הערות אופציונליות..." />
+              <Label className="font-semibold text-slate-700">הערות</Label>
+              <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="הערות אופציונליות..." className="h-11" />
             </div>
           </div>
           <DialogFooter className="flex-row-reverse gap-2">
-            <Button onClick={handleSave} disabled={loading} className="flex-1 sm:flex-none">
+            <Button onClick={handleSave} disabled={loading} className="flex-1 sm:flex-none h-11 font-semibold">
               {loading ? 'שומר...' : editing ? 'שמור שינויים' : 'הוסף הזמנה'}
             </Button>
             <DialogClose>
-              <Button variant="outline" type="button" className="flex-1 sm:flex-none">ביטול</Button>
+              <Button variant="outline" type="button" className="flex-1 sm:flex-none h-11">ביטול</Button>
             </DialogClose>
           </DialogFooter>
         </DialogContent>
@@ -357,7 +439,7 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
         <DialogContent className="sm:max-w-sm">
           <DialogHeader><DialogTitle>מחיקת הזמנה</DialogTitle></DialogHeader>
           <p className="text-sm text-slate-600">האם אתה בטוח? פעולה זו אינה ניתנת לביטול.</p>
-          <DialogFooter className="flex-row-reverse gap-2">
+          <DialogFooter className="flex-row-reverse gap-2 mt-2">
             <Button variant="destructive" onClick={() => deleteId && handleDelete(deleteId)} className="flex-1 sm:flex-none">מחק</Button>
             <Button variant="outline" onClick={() => setDeleteId(null)} className="flex-1 sm:flex-none">ביטול</Button>
           </DialogFooter>
