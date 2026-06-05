@@ -3,58 +3,83 @@
 import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { BarChart2, TrendingUp, Calendar, Banknote } from 'lucide-react'
+import { BarChart2, TrendingUp, Calendar, Banknote, Users2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type Appointment = { date: string; price: number; status: string; customer_name: string }
+type GroupSession = { date: string; price_per_participant: number; enrolled: number }
 type Period = 'daily' | 'weekly' | 'monthly'
 
 function startOfWeek(d: Date) {
-  const day = d.getDay()
-  const diff = d.getDate() - day
+  const diff = d.getDate() - d.getDay()
   return new Date(d.getFullYear(), d.getMonth(), diff)
 }
+function isoWeek(d: Date) { return startOfWeek(d).toISOString().split('T')[0] }
 
-function isoWeek(d: Date) {
-  const sw = startOfWeek(d)
-  return sw.toISOString().split('T')[0]
-}
-
-export default function ReportsClient({ appointments }: { appointments: Appointment[] }) {
+export default function ReportsClient({ appointments, groupSessions }: {
+  appointments: Appointment[]
+  groupSessions: GroupSession[]
+}) {
   const [period, setPeriod] = useState<Period>('monthly')
 
-  const paid = useMemo(() => appointments.filter(a => a.status !== 'בוטל' && a.price > 0), [appointments])
+  // Individual appointments income (non-cancelled, with price)
+  const paidAppts = useMemo(() => appointments.filter(a => a.status !== 'בוטל' && a.price > 0), [appointments])
 
+  // Group sessions income: price_per_participant × enrolled
+  const groupIncomeSessions = useMemo(() =>
+    groupSessions.map(g => ({ date: g.date, income: (g.price_per_participant || 0) * (g.enrolled || 0) }))
+      .filter(g => g.income > 0),
+    [groupSessions]
+  )
+
+  // Combined breakdown by period
   const grouped = useMemo(() => {
-    const map = new Map<string, { income: number; count: number }>()
-    for (const a of paid) {
-      let key = ''
-      const d = new Date(a.date + 'T00:00:00')
-      if (period === 'daily') key = a.date
-      else if (period === 'weekly') key = isoWeek(d)
-      else key = a.date.slice(0, 7)
+    const map = new Map<string, { apptIncome: number; groupIncome: number; apptCount: number; groupCount: number }>()
 
-      const cur = map.get(key) ?? { income: 0, count: 0 }
-      map.set(key, { income: cur.income + (a.price || 0), count: cur.count + 1 })
+    function key(date: string) {
+      const d = new Date(date + 'T00:00:00')
+      if (period === 'daily') return date
+      if (period === 'weekly') return isoWeek(d)
+      return date.slice(0, 7)
     }
+
+    for (const a of paidAppts) {
+      const k = key(a.date)
+      const cur = map.get(k) ?? { apptIncome: 0, groupIncome: 0, apptCount: 0, groupCount: 0 }
+      map.set(k, { ...cur, apptIncome: cur.apptIncome + a.price, apptCount: cur.apptCount + 1 })
+    }
+    for (const g of groupIncomeSessions) {
+      const k = key(g.date)
+      const cur = map.get(k) ?? { apptIncome: 0, groupIncome: 0, apptCount: 0, groupCount: 0 }
+      map.set(k, { ...cur, groupIncome: cur.groupIncome + g.income, groupCount: cur.groupCount + 1 })
+    }
+
     return Array.from(map.entries())
-      .map(([key, val]) => ({ key, ...val }))
+      .map(([k, v]) => ({ key: k, total: v.apptIncome + v.groupIncome, ...v }))
       .sort((a, b) => b.key.localeCompare(a.key))
       .slice(0, 30)
-  }, [paid, period])
+  }, [paidAppts, groupIncomeSessions, period])
 
-  const totalIncome = paid.reduce((s, a) => s + (a.price || 0), 0)
-  const totalAppts = appointments.length
-  const cancelledCount = appointments.filter(a => a.status === 'בוטל').length
-
-  // current month / week / today income
   const today = new Date().toISOString().split('T')[0]
   const thisMonth = today.slice(0, 7)
   const thisWeekStart = isoWeek(new Date())
 
-  const todayIncome = paid.filter(a => a.date === today).reduce((s, a) => s + a.price, 0)
-  const weekIncome = paid.filter(a => a.date >= thisWeekStart).reduce((s, a) => s + a.price, 0)
-  const monthIncome = paid.filter(a => a.date.startsWith(thisMonth)).reduce((s, a) => s + a.price, 0)
+  function sumIncome(filter: (date: string) => boolean) {
+    const a = paidAppts.filter(x => filter(x.date)).reduce((s, x) => s + x.price, 0)
+    const g = groupIncomeSessions.filter(x => filter(x.date)).reduce((s, x) => s + x.income, 0)
+    return a + g
+  }
+
+  const todayIncome   = sumIncome(d => d === today)
+  const weekIncome    = sumIncome(d => d >= thisWeekStart)
+  const monthIncome   = sumIncome(d => d.startsWith(thisMonth))
+  const totalApptIncome  = paidAppts.reduce((s, a) => s + a.price, 0)
+  const totalGroupIncome = groupIncomeSessions.reduce((s, g) => s + g.income, 0)
+  const totalIncome = totalApptIncome + totalGroupIncome
+
+  const totalAppts = appointments.length
+  const cancelledCount = appointments.filter(a => a.status === 'בוטל').length
+  const totalGroupSessions = groupSessions.length
 
   function formatKey(key: string) {
     if (period === 'daily') return new Date(key + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'short' })
@@ -63,7 +88,7 @@ export default function ReportsClient({ appointments }: { appointments: Appointm
     return new Date(Number(y), Number(m) - 1).toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })
   }
 
-  const maxIncome = Math.max(...grouped.map(g => g.income), 1)
+  const maxIncome = Math.max(...grouped.map(g => g.total), 1)
 
   const PERIODS: { value: Period; label: string }[] = [
     { value: 'daily', label: 'יומי' },
@@ -75,7 +100,7 @@ export default function ReportsClient({ appointments }: { appointments: Appointm
     <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">דוחות כספיים</h1>
-        <p className="text-slate-500 text-sm mt-0.5">סיכום הכנסות מתורים</p>
+        <p className="text-slate-500 text-sm mt-0.5">סיכום הכנסות מתורים ופגישות קבוצתיות</p>
       </div>
 
       {/* Summary cards */}
@@ -106,14 +131,25 @@ export default function ReportsClient({ appointments }: { appointments: Appointm
         </Card>
       </div>
 
-      {/* Additional stats */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* Income breakdown by source */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="bg-slate-100 rounded-xl p-2.5"><Calendar className="h-5 w-5 text-slate-600" /></div>
             <div>
-              <p className="text-xs text-slate-500">סה״כ תורים</p>
+              <p className="text-xs text-slate-500">תורים</p>
               <p className="text-xl font-bold text-slate-900">{totalAppts}</p>
+              <p className="text-xs text-slate-400">₪{totalApptIncome.toLocaleString()}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="bg-primary/10 rounded-xl p-2.5"><Users2 className="h-5 w-5 text-primary" /></div>
+            <div>
+              <p className="text-xs text-slate-500">פגישות קבוצתיות</p>
+              <p className="text-xl font-bold text-slate-900">{totalGroupSessions}</p>
+              <p className="text-xs text-slate-400">₪{totalGroupIncome.toLocaleString()}</p>
             </div>
           </CardContent>
         </Card>
@@ -123,6 +159,15 @@ export default function ReportsClient({ appointments }: { appointments: Appointm
             <div>
               <p className="text-xs text-slate-500">בוטלו</p>
               <p className="text-xl font-bold text-slate-900">{cancelledCount}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="bg-green-100 rounded-xl p-2.5"><Banknote className="h-5 w-5 text-green-600" /></div>
+            <div>
+              <p className="text-xs text-slate-500">סה״כ הכנסות</p>
+              <p className="text-xl font-bold text-green-600">₪{totalIncome.toLocaleString()}</p>
             </div>
           </CardContent>
         </Card>
@@ -156,17 +201,29 @@ export default function ReportsClient({ appointments }: { appointments: Appointm
               {grouped.map(g => (
                 <div key={g.key} className="flex items-center gap-3">
                   <div className="w-28 text-sm text-slate-600 shrink-0 text-right">{formatKey(g.key)}</div>
-                  <div className="flex-1 bg-slate-100 rounded-full h-6 overflow-hidden">
-                    <div
-                      className="h-full bg-primary/80 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
-                      style={{ width: `${Math.max((g.income / maxIncome) * 100, 4)}%` }}
-                    >
-                      <span className="text-xs text-white font-bold whitespace-nowrap">₪{g.income.toLocaleString()}</span>
+                  <div className="flex-1 bg-slate-100 rounded-full h-6 overflow-hidden relative">
+                    {/* Appointments portion */}
+                    {g.apptIncome > 0 && (
+                      <div className="absolute top-0 right-0 h-full bg-primary/80 rounded-r-full transition-all duration-500"
+                        style={{ width: `${Math.max((g.apptIncome / maxIncome) * 100, 2)}%` }} />
+                    )}
+                    {/* Group sessions portion stacked */}
+                    {g.groupIncome > 0 && (
+                      <div className="absolute top-0 right-0 h-full bg-primary/40 rounded-r-full transition-all duration-500"
+                        style={{ width: `${Math.max((g.total / maxIncome) * 100, 4)}%` }} />
+                    )}
+                    <div className="absolute inset-0 flex items-center justify-end pr-2">
+                      <span className="text-xs text-white font-bold whitespace-nowrap drop-shadow">₪{g.total.toLocaleString()}</span>
                     </div>
                   </div>
-                  <Badge variant="secondary" className="font-normal text-xs shrink-0 w-14 text-center justify-center">
-                    {g.count} תורים
-                  </Badge>
+                  <div className="flex flex-col items-end gap-0.5 shrink-0 min-w-[60px]">
+                    {g.apptCount > 0 && (
+                      <Badge variant="secondary" className="font-normal text-xs py-0">{g.apptCount} תורים</Badge>
+                    )}
+                    {g.groupCount > 0 && (
+                      <Badge className="font-normal text-xs py-0 bg-primary/20 text-primary hover:bg-primary/20">{g.groupCount} קבוצתי</Badge>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

@@ -159,98 +159,115 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
         </div>
       </div>
 
-      {/* Desktop table */}
-      <div className="hidden md:block rounded-xl bg-white overflow-hidden shadow-sm">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-slate-50 hover:bg-slate-50">
-              <TableHead className="font-semibold text-slate-700">לקוח</TableHead>
-              <TableHead className="font-semibold text-slate-700">שירות</TableHead>
-              <TableHead className="font-semibold text-slate-700">מחיר</TableHead>
-              <TableHead className="font-semibold text-slate-700">תאריך</TableHead>
-              <TableHead className="font-semibold text-slate-700">סטטוס</TableHead>
-              <TableHead className="text-left font-semibold text-slate-700">פעולות</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {displayed.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-14 text-slate-400">
-                  <ShoppingBag className="h-10 w-10 mx-auto mb-3 opacity-20" />
-                  <p className="font-medium">{showHistory ? 'אין הזמנות בהיסטוריה' : 'אין הזמנות קרובות'}</p>
-                  {!showHistory && <p className="text-sm">הוסף את ההזמנה הראשונה</p>}
-                </TableCell>
-              </TableRow>
-            ) : displayed.map(o => (
-              <TableRow key={o.id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => setDetailOrder(o)}>
-                <TableCell className="font-semibold text-slate-800">{o.customer_name}</TableCell>
-                <TableCell>
-                  {o.service_name
-                    ? <Badge variant="secondary" className="font-normal text-xs gap-1"><Scissors className="h-3 w-3" />{o.service_name}</Badge>
-                    : <span className="text-slate-400">—</span>}
-                </TableCell>
-                <TableCell className="text-slate-600 font-medium">{o.price ? `₪${o.price}` : '—'}</TableCell>
-                <TableCell>{new Date(o.date + 'T00:00:00').toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' })}</TableCell>
-                <TableCell><StatusBadge date={o.date} /></TableCell>
-                <TableCell className="text-left">
-                  <div className="flex gap-1 justify-end" onClick={e => e.stopPropagation()}>
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(o)}>
-                      <Pencil className="h-3.5 w-3.5 text-slate-500" />
-                    </Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setDeleteId(o.id)}>
-                      <Trash2 className="h-3.5 w-3.5 text-red-400" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Mobile cards */}
-      <div className="md:hidden space-y-3">
-        {displayed.length === 0 ? (
-          <div className="text-center py-14 text-slate-400">
-            <ShoppingBag className="h-10 w-10 mx-auto mb-3 opacity-20" />
-            <p className="font-medium">{showHistory ? 'אין הזמנות בהיסטוריה' : 'אין הזמנות קרובות'}</p>
-          </div>
-        ) : displayed.map(o => (
-          <Card key={o.id} className="border-0 shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => setDetailOrder(o)}>
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <p className="font-bold text-slate-900">{o.title || o.service_name || '(ללא כותרת)'}</p>
-                    <StatusBadge date={o.date} />
-                  </div>
-                  {o.service_name && (
-                    <p className="text-xs text-slate-500 flex items-center gap-1 mb-1">
-                      <Scissors className="h-3 w-3 shrink-0" />{o.service_name}
-                      {o.price ? <span className="font-medium text-slate-700 mr-1">· ₪{o.price}</span> : null}
-                    </p>
-                  )}
-                  <p className="text-sm text-slate-600 flex items-center gap-1.5">
-                    <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-                    {new Date(o.date + 'T00:00:00').toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' })}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                    <User className="h-3 w-3 shrink-0" />{o.customer_name}
-                  </p>
+      {/* Group orders by date */}
+      {displayed.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+          <ShoppingBag className="h-12 w-12 mb-4 opacity-20" />
+          <p className="font-medium text-base">{showHistory ? 'אין הזמנות בהיסטוריה' : 'אין הזמנות קרובות'}</p>
+          {!showHistory && <p className="text-sm mt-1">לחץ על &quot;הוסף הזמנה&quot; כדי להתחיל</p>}
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {(() => {
+            // Build date groups
+            const groups: { date: string; label: string; items: Order[] }[] = []
+            for (const o of displayed) {
+              const last = groups[groups.length - 1]
+              if (last && last.date === o.date) { last.items.push(o) }
+              else {
+                groups.push({
+                  date: o.date,
+                  label: new Date(o.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' }),
+                  items: [o],
+                })
+              }
+            }
+            return groups.map(({ date, label, items }) => (
+              <div key={date}>
+                {/* Date header */}
+                <div className="flex items-center gap-3 mb-3">
+                  <h2 className="text-sm font-bold text-slate-700 whitespace-nowrap">{label}</h2>
+                  <div className="flex-1 h-px bg-slate-200" />
+                  <StatusBadge date={date} />
                 </div>
-                <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-                  <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => openEdit(o)}>
-                    <Pencil className="h-4 w-4 text-slate-500" />
-                  </Button>
-                  <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => setDeleteId(o.id)}>
-                    <Trash2 className="h-4 w-4 text-red-400" />
-                  </Button>
+
+                {/* Desktop table */}
+                <div className="hidden md:block rounded-xl bg-white overflow-hidden shadow-sm">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50 hover:bg-slate-50">
+                        <TableHead className="font-semibold text-slate-700">לקוח</TableHead>
+                        <TableHead className="font-semibold text-slate-700">שירות</TableHead>
+                        <TableHead className="font-semibold text-slate-700">מחיר</TableHead>
+                        <TableHead className="font-semibold text-slate-700">סטטוס</TableHead>
+                        <TableHead className="text-left font-semibold text-slate-700">פעולות</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {items.map(o => (
+                        <TableRow key={o.id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => setDetailOrder(o)}>
+                          <TableCell className="font-semibold text-slate-800">{o.customer_name}</TableCell>
+                          <TableCell>
+                            {o.service_name
+                              ? <Badge variant="secondary" className="font-normal text-xs gap-1"><Scissors className="h-3 w-3" />{o.service_name}</Badge>
+                              : <span className="text-slate-400">—</span>}
+                          </TableCell>
+                          <TableCell className="text-slate-600 font-medium">{o.price ? `₪${o.price}` : '—'}</TableCell>
+                          <TableCell><StatusBadge date={o.date} /></TableCell>
+                          <TableCell className="text-left">
+                            <div className="flex gap-1 justify-end" onClick={e => e.stopPropagation()}>
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(o)}>
+                                <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setDeleteId(o.id)}>
+                                <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Mobile cards */}
+                <div className="md:hidden space-y-2">
+                  {items.map(o => (
+                    <Card key={o.id} className="border-0 shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => setDetailOrder(o)}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <p className="font-bold text-slate-900">{o.title || o.service_name || '(ללא כותרת)'}</p>
+                            </div>
+                            {o.service_name && (
+                              <p className="text-xs text-slate-500 flex items-center gap-1 mb-1">
+                                <Scissors className="h-3 w-3 shrink-0" />{o.service_name}
+                                {o.price ? <span className="font-medium text-slate-700 mr-1">· ₪{o.price}</span> : null}
+                              </p>
+                            )}
+                            <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                              <User className="h-3 w-3 shrink-0" />{o.customer_name}
+                            </p>
+                          </div>
+                          <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                            <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => openEdit(o)}>
+                              <Pencil className="h-4 w-4 text-slate-500" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => setDeleteId(o.id)}>
+                              <Trash2 className="h-4 w-4 text-red-400" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            ))
+          })()}
+        </div>
+      )}
 
       {/* Detail popup */}
       {detailOrder && (
