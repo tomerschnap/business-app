@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Pencil, Trash2, ShoppingBag, CalendarDays, User, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, ShoppingBag, CalendarDays, User, X, History } from 'lucide-react'
 
 type Order = {
   id: string
@@ -50,6 +50,12 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
   const [loading, setLoading] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [detailOrder, setDetailOrder] = useState<Order | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
+
+  const today = new Date().toISOString().split('T')[0]
+  const upcoming = orders.filter(o => o.date >= today)
+  const past = orders.filter(o => o.date < today).sort((a, b) => b.date.localeCompare(a.date))
+  const displayed = showHistory ? past : upcoming
 
   function openAdd() {
     setEditing(null)
@@ -120,14 +126,25 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
 
   return (
     <div className="space-y-5 max-w-5xl">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">הזמנות</h1>
-          <p className="text-slate-500 text-sm mt-0.5">{orders.length} הזמנות בסה״כ</p>
+          <p className="text-slate-500 text-sm mt-0.5">
+            {showHistory ? `${past.length} הזמנות בהיסטוריה` : `${upcoming.length} הזמנות קרובות`}
+          </p>
         </div>
-        <Button onClick={openAdd} className="gap-2 shadow-sm">
-          <Plus className="h-4 w-4" /> הוסף הזמנה
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowHistory(h => !h)} className="gap-2">
+            <History className="h-4 w-4" />
+            היסטוריה
+            {past.length > 0 && (
+              <span className="bg-slate-200 text-slate-600 text-xs font-semibold rounded-full px-1.5 py-0.5 leading-none">{past.length}</span>
+            )}
+          </Button>
+          <Button onClick={openAdd} className="gap-2 shadow-sm">
+            <Plus className="h-4 w-4" /> הוסף הזמנה
+          </Button>
+        </div>
       </div>
 
       {/* Desktop table */}
@@ -143,15 +160,15 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
             </TableRow>
           </TableHeader>
           <TableBody>
-            {orders.length === 0 ? (
+            {displayed.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-14 text-slate-400">
                   <ShoppingBag className="h-10 w-10 mx-auto mb-3 opacity-20" />
-                  <p className="font-medium">אין הזמנות עדיין</p>
-                  <p className="text-sm">הוסף את ההזמנה הראשונה</p>
+                  <p className="font-medium">{showHistory ? 'אין הזמנות בהיסטוריה' : 'אין הזמנות קרובות'}</p>
+                  {!showHistory && <p className="text-sm">הוסף את ההזמנה הראשונה</p>}
                 </TableCell>
               </TableRow>
-            ) : orders.map(o => (
+            ) : displayed.map(o => (
               <TableRow key={o.id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => setDetailOrder(o)}>
                 <TableCell className="font-semibold text-slate-800">{o.title || '—'}</TableCell>
                 <TableCell className="text-slate-600">{o.customer_name}</TableCell>
@@ -175,12 +192,12 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
 
       {/* Mobile cards */}
       <div className="md:hidden space-y-3">
-        {orders.length === 0 ? (
+        {displayed.length === 0 ? (
           <div className="text-center py-14 text-slate-400">
             <ShoppingBag className="h-10 w-10 mx-auto mb-3 opacity-20" />
-            <p className="font-medium">אין הזמנות עדיין</p>
+            <p className="font-medium">{showHistory ? 'אין הזמנות בהיסטוריה' : 'אין הזמנות קרובות'}</p>
           </div>
-        ) : orders.map(o => (
+        ) : displayed.map(o => (
           <Card key={o.id} className="border-0 shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => setDetailOrder(o)}>
             <CardContent className="p-4">
               <div className="flex items-start justify-between gap-2">

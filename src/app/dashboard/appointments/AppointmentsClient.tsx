@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Pencil, Trash2, CalendarDays, Clock, User, UserPlus, Calendar, AlignLeft, Timer, Loader2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, CalendarDays, Clock, User, UserPlus, Calendar, AlignLeft, Timer, Loader2, History } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type Appointment = { id: string; customer_name: string; date: string; time: string; duration: string; notes: string; created_at: string }
@@ -146,6 +146,7 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
   const [customerMode, setCustomerMode] = useState<'select' | 'new'>('select')
   const [loading, setLoading] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
 
   // ── Compute blocked + available slots ────────────────────────────────────────
   const todayStr = new Date().toISOString().split('T')[0]
@@ -252,32 +253,54 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
     setDeleteId(null)
   }
 
-  const grouped: { date: string; label: string; items: Appointment[] }[] = []
-  for (const a of appointments) {
-    const last = grouped[grouped.length - 1]
-    if (last && last.date === a.date) {
-      last.items.push(a)
-    } else {
-      const label = new Date(a.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })
-      grouped.push({ date: a.date, label, items: [a] })
+  const today2 = new Date().toISOString().split('T')[0]
+  const upcoming = appointments.filter(a => a.date >= today2)
+  const past = appointments.filter(a => a.date < today2).reverse()
+  const displayed = showHistory ? past : upcoming
+
+  function makeGroups(list: Appointment[]) {
+    const groups: { date: string; label: string; items: Appointment[] }[] = []
+    for (const a of list) {
+      const last = groups[groups.length - 1]
+      if (last && last.date === a.date) {
+        last.items.push(a)
+      } else {
+        const label = new Date(a.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })
+        groups.push({ date: a.date, label, items: [a] })
+      }
     }
+    return groups
   }
+  const grouped = makeGroups(displayed)
 
   return (
     <div className="space-y-5 max-w-5xl">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">תורים</h1>
-          <p className="text-slate-500 text-sm mt-0.5">{appointments.length} תורים בסה״כ</p>
+          <p className="text-slate-500 text-sm mt-0.5">
+            {showHistory ? `${past.length} תורים בהיסטוריה` : `${upcoming.length} תורים קרובים`}
+          </p>
         </div>
-        <Button onClick={openAdd} className="gap-2 shadow-sm"><Plus className="h-4 w-4" /> קבע תור</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowHistory(h => !h)} className="gap-2">
+            <History className="h-4 w-4" />
+            היסטוריה
+            {past.length > 0 && (
+              <span className="bg-slate-200 text-slate-600 text-xs font-semibold rounded-full px-1.5 py-0.5 leading-none">{past.length}</span>
+            )}
+          </Button>
+          <Button onClick={openAdd} className="gap-2 shadow-sm"><Plus className="h-4 w-4" /> קבע תור</Button>
+        </div>
       </div>
 
-      {appointments.length === 0 ? (
+      {displayed.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-slate-400">
           <CalendarDays className="h-12 w-12 mb-4 opacity-20" />
-          <p className="font-medium text-base">אין תורים עדיין</p>
-          <p className="text-sm mt-1">לחץ על &quot;קבע תור&quot; כדי להתחיל</p>
+          {showHistory
+            ? <p className="font-medium text-base">אין תורים בהיסטוריה</p>
+            : <><p className="font-medium text-base">אין תורים קרובים</p><p className="text-sm mt-1">לחץ על &quot;קבע תור&quot; כדי להתחיל</p></>
+          }
         </div>
       ) : (
         <div className="space-y-8">

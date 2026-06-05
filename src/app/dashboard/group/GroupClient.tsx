@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
-import { Plus, Pencil, Trash2, Users2, CalendarDays, Clock, UserCheck, UserX } from 'lucide-react'
+import { Plus, Pencil, Trash2, Users2, CalendarDays, Clock, UserCheck, UserX, History } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type GroupSession = {
@@ -61,6 +61,12 @@ export default function GroupClient({ initialSessions }: {
   const [form, setForm] = useState(emptyForm)
   const [loading, setLoading] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
+
+  const today = new Date().toISOString().split('T')[0]
+  const upcoming = sessions.filter(s => s.date >= today)
+  const past = sessions.filter(s => s.date < today).sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time))
+  const displayed = showHistory ? past : upcoming
 
   function set<K extends keyof typeof emptyForm>(k: K, v: typeof emptyForm[K]) {
     setForm(f => ({ ...f, [k]: v }))
@@ -126,25 +132,38 @@ export default function GroupClient({ initialSessions }: {
 
   return (
     <div className="space-y-5 max-w-5xl">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">תורים קבוצתיים</h1>
-          <p className="text-slate-500 text-sm mt-0.5">{sessions.length} פגישות קבוצתיות</p>
+          <p className="text-slate-500 text-sm mt-0.5">
+            {showHistory ? `${past.length} פגישות בהיסטוריה` : `${upcoming.length} פגישות קרובות`}
+          </p>
         </div>
-        <Button onClick={openAdd} className="gap-2 shadow-sm">
-          <Plus className="h-4 w-4" /> פגישה חדשה
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowHistory(h => !h)} className="gap-2">
+            <History className="h-4 w-4" />
+            היסטוריה
+            {past.length > 0 && (
+              <span className="bg-slate-200 text-slate-600 text-xs font-semibold rounded-full px-1.5 py-0.5 leading-none">{past.length}</span>
+            )}
+          </Button>
+          <Button onClick={openAdd} className="gap-2 shadow-sm">
+            <Plus className="h-4 w-4" /> פגישה חדשה
+          </Button>
+        </div>
       </div>
 
-      {sessions.length === 0 ? (
+      {displayed.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-slate-400">
           <Users2 className="h-12 w-12 mb-4 opacity-20" />
-          <p className="font-medium text-base">אין פגישות קבוצתיות עדיין</p>
-          <p className="text-sm mt-1">צור את הפגישה הקבוצתית הראשונה</p>
+          {showHistory
+            ? <p className="font-medium text-base">אין פגישות בהיסטוריה</p>
+            : <><p className="font-medium text-base">אין פגישות קבוצתיות קרובות</p><p className="text-sm mt-1">צור את הפגישה הקבוצתית הראשונה</p></>
+          }
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {sessions.map(s => {
+          {displayed.map(s => {
             const free = s.max_participants - s.enrolled
             const pct = s.max_participants > 0 ? (s.enrolled / s.max_participants) * 100 : 0
             return (
