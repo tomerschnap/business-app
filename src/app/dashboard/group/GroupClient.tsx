@@ -23,7 +23,7 @@ type GroupSession = {
   created_at: string
 }
 
-type Customer = { id: string; name: string }
+type Customer = { id: string; name: string } // reserved for future enrollment feature
 
 const emptyForm = {
   title: '',
@@ -48,9 +48,9 @@ function StatusBadge({ date }: { date: string }) {
   return <Badge variant="outline" className="text-xs font-normal text-blue-600 border-blue-200">קרוב</Badge>
 }
 
-export default function GroupClient({ initialSessions, customers }: {
+export default function GroupClient({ initialSessions }: {
   initialSessions: GroupSession[]
-  customers: Customer[]
+  customers?: Customer[]
 }) {
   const supabase = createClient()
   const [sessions, setSessions] = useState<GroupSession[]>(
