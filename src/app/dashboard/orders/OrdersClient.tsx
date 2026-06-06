@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, Pencil, Trash2, ShoppingBag, CalendarDays, User, X, History, Scissors, Banknote } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 type Order = {
   id: string
@@ -22,19 +23,45 @@ type Order = {
   notes: string
   service_name: string
   price: number
+  status: string
   created_at: string
 }
 type Customer = { id: string; name: string }
 type Service = { id: string; name: string; price: number; duration: string }
 type CustomerMode = 'select' | 'new'
 
-const emptyForm = { customer_name: '', date: '', title: '', description: '', notes: '', service_name: '', price: '' }
+const ORDER_STATUSES = ['הזמנה חדשה', 'בהכנה', 'מוכן'] as const
+const ORDER_STATUS_STYLE: Record<string, string> = {
+  'הזמנה חדשה': 'bg-blue-100 text-blue-700 border-blue-200',
+  'בהכנה':      'bg-amber-100 text-amber-700 border-amber-200',
+  'מוכן':       'bg-green-100 text-green-700 border-green-200',
+}
 
-function StatusBadge({ date }: { date: string }) {
+const emptyForm = { customer_name: '', date: '', title: '', description: '', notes: '', service_name: '', price: '', status: 'הזמנה חדשה' }
+
+function DateBadge({ date }: { date: string }) {
   const today = new Date().toISOString().split('T')[0]
   if (date < today) return <Badge variant="secondary" className="text-xs font-normal">עבר</Badge>
   if (date === today) return <Badge className="text-xs bg-green-500 hover:bg-green-600 font-normal">היום</Badge>
   return <Badge variant="outline" className="text-xs font-normal text-blue-600 border-blue-200">קרוב</Badge>
+}
+
+function OrderStatusBadge({ status, onChange }: { status: string; onChange: (s: string) => void }) {
+  const current = status || 'הזמנה חדשה'
+  const nextIndex = (ORDER_STATUSES.indexOf(current as typeof ORDER_STATUSES[number]) + 1) % ORDER_STATUSES.length
+  const next = ORDER_STATUSES[nextIndex]
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); onChange(next) }}
+      title={`לחץ לשינוי ל: ${next}`}
+      className={cn(
+        'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border transition-all hover:opacity-80 active:scale-95 cursor-pointer select-none',
+        ORDER_STATUS_STYLE[current] ?? 'bg-slate-100 text-slate-500 border-slate-200'
+      )}
+    >
+      {current}
+    </button>
+  )
 }
 
 export default function OrdersClient({ initialOrders, customers: initialCustomers, services }: {
@@ -68,6 +95,12 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
     setOpen(true)
   }
 
+  async function handleStatusChange(id: string, newStatus: string) {
+    const { data, error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id).select().single()
+    if (error) { toast.error(error.message); return }
+    setOrders(os => os.map(o => o.id === id ? data : o))
+  }
+
   function openEdit(o: Order) {
     setEditing(o)
     setForm({
@@ -78,6 +111,7 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
       notes: o.notes || '',
       service_name: o.service_name || '',
       price: o.price ? String(o.price) : '',
+      status: o.status || 'הזמנה חדשה',
     })
     setCustomerMode(customers.some(c => c.name === o.customer_name) ? 'select' : 'new')
     setOpen(true)
@@ -112,6 +146,7 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
       notes: form.notes,
       service_name: form.service_name,
       price: parseFloat(form.price) || 0,
+      status: form.status || 'הזמנה חדשה',
     }
     if (editing) {
       const { data, error } = await supabase.from('orders').update(payload).eq('id', editing.id).select().single()
@@ -188,7 +223,7 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
                 <div className="flex items-center gap-3 mb-3">
                   <h2 className="text-sm font-bold text-slate-700 whitespace-nowrap">{label}</h2>
                   <div className="flex-1 h-px bg-slate-200" />
-                  <StatusBadge date={date} />
+                  <DateBadge date={date} />
                 </div>
 
                 {/* Desktop table */}
@@ -213,7 +248,7 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
                               : <span className="text-slate-400">—</span>}
                           </TableCell>
                           <TableCell className="text-slate-600 font-medium">{o.price ? `₪${o.price}` : '—'}</TableCell>
-                          <TableCell><StatusBadge date={o.date} /></TableCell>
+                          <TableCell><OrderStatusBadge status={o.status} onChange={s => handleStatusChange(o.id, s)} /></TableCell>
                           <TableCell className="text-left">
                             <div className="flex gap-1 justify-end" onClick={e => e.stopPropagation()}>
                               <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(o)}>
@@ -239,6 +274,7 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap mb-1">
                               <p className="font-bold text-slate-900">{o.title || o.service_name || '(ללא כותרת)'}</p>
+                              <OrderStatusBadge status={o.status} onChange={s => handleStatusChange(o.id, s)} />
                             </div>
                             {o.service_name && (
                               <p className="text-xs text-slate-500 flex items-center gap-1 mb-1">
@@ -281,7 +317,10 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
                 </div>
                 <div>
                   <p className="font-bold text-lg text-slate-900 leading-tight">{detailOrder.title || detailOrder.service_name || '(ללא כותרת)'}</p>
-                  <StatusBadge date={detailOrder.date} />
+                  <div className="flex items-center gap-2 mt-1">
+                    <DateBadge date={detailOrder.date} />
+                    <OrderStatusBadge status={detailOrder.status} onChange={s => { handleStatusChange(detailOrder.id, s); setDetailOrder(o => o ? { ...o, status: s } : o) }} />
+                  </div>
                 </div>
               </div>
               <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setDetailOrder(null)}>

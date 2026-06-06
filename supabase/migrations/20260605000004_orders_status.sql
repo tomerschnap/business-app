@@ -1,0 +1,1 @@
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'הזמנה חדשה';
