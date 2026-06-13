@@ -111,9 +111,10 @@ function DateBadge({ date }: { date: string }) {
 
 const emptyForm = { title: '', date: '', time: '09:00', max_participants: 10, enrolled: 0, notes: '', price_per_participant: '' }
 
-export default function GroupClient({ initialSessions, workingHours }: {
+export default function GroupClient({ initialSessions, workingHours, businessId }: {
   initialSessions: GroupSession[]
   workingHours: WorkingHours | null
+  businessId: string | null
 }) {
   const supabase = createClient()
   const [sessions, setSessions] = useState<GroupSession[]>(
@@ -183,6 +184,7 @@ export default function GroupClient({ initialSessions, workingHours }: {
       .from('group_session_participants')
       .select('*')
       .eq('session_id', s.id)
+      .eq('business_id', businessId)
       .order('created_at')
     if (error) toast.error(error.message)
     else setParticipants(data ?? [])
@@ -194,13 +196,13 @@ export default function GroupClient({ initialSessions, workingHours }: {
     setAddingParticipant(true)
     const { data, error } = await supabase
       .from('group_session_participants')
-      .insert({ session_id: participantsSession.id, name: newParticipantName.trim() })
+      .insert({ session_id: participantsSession.id, name: newParticipantName.trim(), business_id: businessId })
       .select().single()
     if (error) { toast.error(error.message); setAddingParticipant(false); return }
     setParticipants(ps => [...ps, data])
     // Sync enrolled count
     const newEnrolled = participants.length + 1
-    await supabase.from('group_sessions').update({ enrolled: newEnrolled }).eq('id', participantsSession.id)
+    await supabase.from('group_sessions').update({ enrolled: newEnrolled }).eq('id', participantsSession.id).eq('business_id', businessId)
     setSessions(ss => ss.map(s => s.id === participantsSession.id ? { ...s, enrolled: newEnrolled } : s))
     setParticipantsSession(ps => ps ? { ...ps, enrolled: newEnrolled } : ps)
     setNewParticipantName('')
@@ -208,12 +210,12 @@ export default function GroupClient({ initialSessions, workingHours }: {
   }
 
   async function removeParticipant(id: string) {
-    const { error } = await supabase.from('group_session_participants').delete().eq('id', id)
+    const { error } = await supabase.from('group_session_participants').delete().eq('id', id).eq('business_id', businessId)
     if (error) { toast.error(error.message); return }
     const remaining = participants.filter(p => p.id !== id)
     setParticipants(remaining)
     if (participantsSession) {
-      await supabase.from('group_sessions').update({ enrolled: remaining.length }).eq('id', participantsSession.id)
+      await supabase.from('group_sessions').update({ enrolled: remaining.length }).eq('id', participantsSession.id).eq('business_id', businessId)
       setSessions(ss => ss.map(s => s.id === participantsSession.id ? { ...s, enrolled: remaining.length } : s))
       setParticipantsSession(ps => ps ? { ...ps, enrolled: remaining.length } : ps)
     }
@@ -236,12 +238,12 @@ export default function GroupClient({ initialSessions, workingHours }: {
       price_per_participant: parseFloat(String(form.price_per_participant)) || 0,
     }
     if (editing) {
-      const { data, error } = await supabase.from('group_sessions').update(payload).eq('id', editing.id).select().single()
+      const { data, error } = await supabase.from('group_sessions').update(payload).eq('id', editing.id).eq('business_id', businessId).select().single()
       if (error) { toast.error(error.message); setLoading(false); return }
       setSessions(ss => ss.map(s => s.id === editing.id ? data : s).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)))
       toast.success('הפגישה עודכנה')
     } else {
-      const { data, error } = await supabase.from('group_sessions').insert(payload).select().single()
+      const { data, error } = await supabase.from('group_sessions').insert({ ...payload, business_id: businessId }).select().single()
       if (error) { toast.error(error.message); setLoading(false); return }
       setSessions(ss => [...ss, data].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)))
       toast.success('הפגישה הקבוצתית נוצרה')
@@ -251,7 +253,7 @@ export default function GroupClient({ initialSessions, workingHours }: {
   }
 
   async function handleDelete(id: string) {
-    const { error } = await supabase.from('group_sessions').delete().eq('id', id)
+    const { error } = await supabase.from('group_sessions').delete().eq('id', id).eq('business_id', businessId)
     if (error) toast.error(error.message)
     else { setSessions(ss => ss.filter(s => s.id !== id)); toast.success('הפגישה נמחקה') }
     setDeleteId(null)

@@ -1,8 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
+import { getBusinessId } from '@/lib/getBusinessId'
 import DashboardClient from './DashboardClient'
 
 export default async function DashboardPage() {
   const supabase = createClient()
+  const businessId = await getBusinessId(supabase)
 
   const now = new Date()
   const today = now.toISOString().split('T')[0]
@@ -13,10 +15,10 @@ export default async function DashboardPage() {
     { data: todayAppts },
     { data: todayOrders },
   ] = await Promise.all([
-    supabase.from('customers').select('*', { count: 'exact', head: true }),
-    supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('date', today),
-    supabase.from('appointments').select('*').eq('date', today).order('time'),
-    supabase.from('orders').select('*').eq('date', today).order('created_at'),
+    supabase.from('customers').select('*', { count: 'exact', head: true }).eq('business_id', businessId),
+    supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('business_id', businessId).eq('date', today),
+    supabase.from('appointments').select('*').eq('business_id', businessId).eq('date', today).order('time'),
+    supabase.from('orders').select('*').eq('business_id', businessId).eq('date', today).order('created_at'),
   ])
 
   const todayRevenue = (todayAppts ?? [])

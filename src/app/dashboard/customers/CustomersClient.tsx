@@ -38,9 +38,11 @@ const empty = { name: '', email: '', phone: '', notes: '', birthday: '', tag: ''
 export default function CustomersClient({
   initialCustomers,
   statsMap,
+  businessId,
 }: {
   initialCustomers: Customer[]
   statsMap: Record<string, Stats>
+  businessId: string | null
 }) {
   const supabase = createClient()
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
@@ -78,11 +80,11 @@ export default function CustomersClient({
       tag: form.tag, debt: parseFloat(form.debt) || 0,
     }
     if (editing) {
-      const { data, error } = await supabase.from('customers').update(payload).eq('id', editing.id).select().single()
+      const { data, error } = await supabase.from('customers').update(payload).eq('id', editing.id).eq('business_id', businessId).select().single()
       if (error) toast.error(error.message)
       else { setCustomers(cs => cs.map(c => c.id === editing.id ? data : c)); toast.success('הלקוח עודכן'); setOpen(false) }
     } else {
-      const { data, error } = await supabase.from('customers').insert(payload).select().single()
+      const { data, error } = await supabase.from('customers').insert({ ...payload, business_id: businessId }).select().single()
       if (error) toast.error(error.message)
       else {
         setCustomers(cs => [data, ...cs]); toast.success('לקוח נוסף בהצלחה'); setOpen(false)
@@ -93,7 +95,7 @@ export default function CustomersClient({
   }
 
   async function handleDelete(id: string) {
-    const { error } = await supabase.from('customers').delete().eq('id', id)
+    const { error } = await supabase.from('customers').delete().eq('id', id).eq('business_id', businessId)
     if (error) toast.error(error.message)
     else { setCustomers(cs => cs.filter(c => c.id !== id)); toast.success('הלקוח נמחק') }
     setDeleteId(null)

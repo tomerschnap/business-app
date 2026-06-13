@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { getBusinessId } from '@/lib/getBusinessId'
 import { Search, Users, CalendarDays, ShoppingBag, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -45,10 +46,11 @@ export default function GlobalSearch({ mobile }: { mobile?: boolean }) {
 
   async function search(q: string) {
     setLoading(true)
+    const businessId = await getBusinessId(supabase)
     const [{ data: customers }, { data: appointments }, { data: orders }] = await Promise.all([
-      supabase.from('customers').select('id, name, phone, email').ilike('name', `%${q}%`).limit(5),
-      supabase.from('appointments').select('id, customer_name, date, time').ilike('customer_name', `%${q}%`).limit(5),
-      supabase.from('orders').select('id, customer_name, title, date').or(`customer_name.ilike.%${q}%,title.ilike.%${q}%`).limit(5),
+      supabase.from('customers').select('id, name, phone, email').eq('business_id', businessId).ilike('name', `%${q}%`).limit(5),
+      supabase.from('appointments').select('id, customer_name, date, time').eq('business_id', businessId).ilike('customer_name', `%${q}%`).limit(5),
+      supabase.from('orders').select('id, customer_name, title, date').eq('business_id', businessId).or(`customer_name.ilike.%${q}%,title.ilike.%${q}%`).limit(5),
     ])
     const res: Result[] = [
       ...(customers ?? []).map(c => ({ type: 'customer' as const, label: c.name, sub: c.phone || c.email || '', href: '/dashboard/customers' })),

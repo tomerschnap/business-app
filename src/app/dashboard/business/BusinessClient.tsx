@@ -60,10 +60,11 @@ const emptyProfile = (userId: string): Profile => ({
   working_hours: DEFAULT_WORKING_HOURS,
 })
 
-export default function BusinessClient({ initialProfile, userId, initialBlockedDates }: {
+export default function BusinessClient({ initialProfile, userId, initialBlockedDates, businessId }: {
   initialProfile: Profile | null
   userId: string
   initialBlockedDates: BlockedDate[]
+  businessId: string | null
 }) {
   const supabase = createClient()
   const [form, setForm] = useState<Profile>({
@@ -126,14 +127,14 @@ export default function BusinessClient({ initialProfile, userId, initialBlockedD
     if (!newDate) return toast.error('נא לבחור תאריך')
     if (blockedDates.some(b => b.date === newDate)) return toast.error('תאריך זה כבר חסום')
     setAddingDate(true)
-    const { data, error } = await supabase.from('blocked_dates').insert({ date: newDate, reason: newReason }).select().single()
+    const { data, error } = await supabase.from('blocked_dates').insert({ date: newDate, reason: newReason, business_id: businessId }).select().single()
     if (error) toast.error(error.message)
     else { setBlockedDates(bs => [...bs, data].sort((a, b) => a.date.localeCompare(b.date))); setNewDate(''); setNewReason(''); toast.success('התאריך נחסם') }
     setAddingDate(false)
   }
 
   async function removeBlockedDate(id: string) {
-    const { error } = await supabase.from('blocked_dates').delete().eq('id', id)
+    const { error } = await supabase.from('blocked_dates').delete().eq('id', id).eq('business_id', businessId)
     if (error) toast.error(error.message)
     else { setBlockedDates(bs => bs.filter(b => b.id !== id)); toast.success('החסימה הוסרה') }
   }

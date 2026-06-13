@@ -18,7 +18,7 @@ type Service = { id: string; name: string; price: number; duration: string; crea
 const DURATIONS = ['15 דקות', '30 דקות', '45 דקות', 'שעה', 'שעה וחצי', 'שעתיים']
 const empty = { name: '', price: '', duration: '30 דקות' }
 
-export default function ServicesClient({ initialServices }: { initialServices: Service[] }) {
+export default function ServicesClient({ initialServices, businessId }: { initialServices: Service[]; businessId: string | null }) {
   const supabase = createClient()
   const [services, setServices] = useState<Service[]>(initialServices)
   const [open, setOpen] = useState(false)
@@ -35,11 +35,11 @@ export default function ServicesClient({ initialServices }: { initialServices: S
     setLoading(true)
     const payload = { name: form.name.trim(), price: parseFloat(form.price) || 0, duration: form.duration }
     if (editing) {
-      const { data, error } = await supabase.from('services').update(payload).eq('id', editing.id).select().single()
+      const { data, error } = await supabase.from('services').update(payload).eq('id', editing.id).eq('business_id', businessId).select().single()
       if (error) toast.error(error.message)
       else { setServices(ss => ss.map(s => s.id === editing.id ? data : s)); toast.success('השירות עודכן'); setOpen(false) }
     } else {
-      const { data, error } = await supabase.from('services').insert(payload).select().single()
+      const { data, error } = await supabase.from('services').insert({ ...payload, business_id: businessId }).select().single()
       if (error) toast.error(error.message)
       else { setServices(ss => [data, ...ss]); toast.success('שירות נוסף'); setOpen(false) }
     }
@@ -47,7 +47,7 @@ export default function ServicesClient({ initialServices }: { initialServices: S
   }
 
   async function handleDelete(id: string) {
-    const { error } = await supabase.from('services').delete().eq('id', id)
+    const { error } = await supabase.from('services').delete().eq('id', id).eq('business_id', businessId)
     if (error) toast.error(error.message)
     else { setServices(ss => ss.filter(s => s.id !== id)); toast.success('השירות נמחק') }
     setDeleteId(null)

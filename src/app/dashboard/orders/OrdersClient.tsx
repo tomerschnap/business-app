@@ -64,10 +64,11 @@ function OrderStatusBadge({ status, onChange }: { status: string; onChange: (s: 
   )
 }
 
-export default function OrdersClient({ initialOrders, customers: initialCustomers, services }: {
+export default function OrdersClient({ initialOrders, customers: initialCustomers, services, businessId }: {
   initialOrders: Order[]
   customers: Customer[]
   services: Service[]
+  businessId: string | null
 }) {
   const supabase = createClient()
   const [orders, setOrders] = useState<Order[]>(
@@ -96,7 +97,7 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
   }
 
   async function handleStatusChange(id: string, newStatus: string) {
-    const { data, error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id).select().single()
+    const { data, error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id).eq('business_id', businessId).select().single()
     if (error) { toast.error(error.message); return }
     setOrders(os => os.map(o => o.id === id ? data : o))
   }
@@ -126,7 +127,7 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
   async function autoSaveCustomer(name: string) {
     const trimmed = name.trim()
     if (!trimmed || customers.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) return
-    const { data } = await supabase.from('customers').insert({ name: trimmed }).select('id, name').single()
+    const { data } = await supabase.from('customers').insert({ name: trimmed, business_id: businessId }).select('id, name').single()
     if (data) setCustomers(cs => [...cs, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
   }
 
@@ -149,13 +150,13 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
       status: form.status || 'הזמנה חדשה',
     }
     if (editing) {
-      const { data, error } = await supabase.from('orders').update(payload).eq('id', editing.id).select().single()
+      const { data, error } = await supabase.from('orders').update(payload).eq('id', editing.id).eq('business_id', businessId).select().single()
       if (error) { toast.error(error.message); setLoading(false); return }
       setOrders(os => os.map(o => o.id === editing.id ? data : o).sort((a, b) => a.date.localeCompare(b.date)))
       toast.success('ההזמנה עודכנה')
       setOpen(false)
     } else {
-      const { data, error } = await supabase.from('orders').insert(payload).select().single()
+      const { data, error } = await supabase.from('orders').insert({ ...payload, business_id: businessId }).select().single()
       if (error) { toast.error(error.message); setLoading(false); return }
       setOrders(os => [...os, data].sort((a, b) => a.date.localeCompare(b.date)))
       toast.success('ההזמנה נוספה בהצלחה')
@@ -165,7 +166,7 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
   }
 
   async function handleDelete(id: string) {
-    const { error } = await supabase.from('orders').delete().eq('id', id)
+    const { error } = await supabase.from('orders').delete().eq('id', id).eq('business_id', businessId)
     if (error) toast.error(error.message)
     else { setOrders(os => os.filter(o => o.id !== id)); toast.success('ההזמנה נמחקה') }
     setDeleteId(null)

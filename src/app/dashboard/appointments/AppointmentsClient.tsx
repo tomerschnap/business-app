@@ -139,12 +139,13 @@ function StatusSelect({ value, onChange }: { value: string; onChange: (v: string
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function AppointmentsClient({ initialAppointments, customers: initialCustomers, workingHours, services, blockedDates }: {
+export default function AppointmentsClient({ initialAppointments, customers: initialCustomers, workingHours, services, blockedDates, businessId }: {
   initialAppointments: Appointment[]
   customers: Customer[]
   workingHours: WorkingHours | null
   services: Service[]
   blockedDates: string[]
+  businessId: string | null
 }) {
   const supabase = createClient()
   const [appointments, setAppointments] = useState<Appointment[]>(
@@ -213,7 +214,7 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
     const trimmed = name.trim()
     if (!trimmed) return
     if (customers.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) return
-    const { data } = await supabase.from('customers').insert({ name: trimmed }).select('id, name').single()
+    const { data } = await supabase.from('customers').insert({ name: trimmed, business_id: businessId }).select('id, name').single()
     if (data) {
       setCustomers(cs => [...cs, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
       await logActivity('לקוח חדש', `שם: ${trimmed} (נוסף אוטומטית)`)
@@ -222,7 +223,7 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
 
   async function handleStatusChange(id: string, newStatus: string) {
     const appt = appointments.find(a => a.id === id)
-    const { data, error } = await supabase.from('appointments').update({ status: newStatus }).eq('id', id).select().single()
+    const { data, error } = await supabase.from('appointments').update({ status: newStatus }).eq('id', id).eq('business_id', businessId).select().single()
     if (error) { toast.error(error.message); return }
     setAppointments(as => as.map(a => a.id === id ? data : a).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)))
     await logActivity('עדכון סטטוס', `${appt?.customer_name || ''} — ${appt?.date || ''} ${appt?.time || ''}: ${newStatus}`)
@@ -244,13 +245,13 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
       status: form.status, price: parseFloat(form.price) || 0,
     }
     if (editing) {
-      const { data, error } = await supabase.from('appointments').update(payload).eq('id', editing.id).select().single()
+      const { data, error } = await supabase.from('appointments').update(payload).eq('id', editing.id).eq('business_id', businessId).select().single()
       if (error) { toast.error(error.message); setLoading(false); return }
       setAppointments(as => as.map(a => a.id === editing.id ? data : a).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)))
       toast.success('התור עודכן')
       await logActivity('עדכון תור', `${payload.customer_name} — ${payload.date} ${payload.time}`)
     } else {
-      const { data, error } = await supabase.from('appointments').insert(payload).select().single()
+      const { data, error } = await supabase.from('appointments').insert({ ...payload, business_id: businessId }).select().single()
       if (error) { toast.error(error.message); setLoading(false); return }
       setAppointments(as => [...as, data].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)))
       toast.success('התור נקבע בהצלחה')
@@ -262,7 +263,7 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
 
   async function handleDelete(id: string) {
     const appt = appointments.find(a => a.id === id)
-    const { error } = await supabase.from('appointments').delete().eq('id', id)
+    const { error } = await supabase.from('appointments').delete().eq('id', id).eq('business_id', businessId)
     if (error) { toast.error(error.message); return }
     setAppointments(as => as.filter(a => a.id !== id))
     toast.success('התור נמחק')
