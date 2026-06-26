@@ -489,6 +489,12 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
               <Input value={form.notes} onChange={e => set('notes', e.target.value)} placeholder={services.length > 0 ? "או הקלד שירות ידנית..." : "שם השירות"} className="h-11 text-base" />
             </div>
 
+            {/* Price */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm"><Banknote className="h-4 w-4 text-slate-400" /> מחיר (₪)</Label>
+              <Input type="number" min="0" step="1" dir="ltr" value={form.price} onChange={e => set('price', e.target.value)} placeholder="0" className="h-11 text-base text-left" />
+            </div>
+
             {/* Phone */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm"><Phone className="h-4 w-4 text-slate-400" /> טלפון</Label>
@@ -541,12 +547,6 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
                   </button>
                 ))}
               </div>
-            </div>
-
-            {/* Price */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm"><Banknote className="h-4 w-4 text-slate-400" /> מחיר (₪)</Label>
-              <Input type="number" min="0" step="1" dir="ltr" value={form.price} onChange={e => set('price', e.target.value)} placeholder="0" className="h-11 text-base text-left" />
             </div>
 
             {/* Notes */}
