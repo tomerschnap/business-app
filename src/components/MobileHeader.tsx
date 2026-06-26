@@ -50,7 +50,7 @@ export default function MobileHeader({ userEmail }: { userEmail: string }) {
           <span className="font-bold text-slate-800">{currentPage}</span>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" onClick={() => router.refresh()}>
+          <Button variant="ghost" size="icon" onClick={() => window.location.reload()}>
             <RefreshCw className="h-4 w-4 text-slate-500" />
           </Button>
           <GlobalSearch mobile />

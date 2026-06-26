@@ -49,7 +49,7 @@ export default function Sidebar({ userEmail }: { userEmail: string }) {
       {/* Global Search + Refresh */}
       <div className="px-3 pt-3 pb-1 flex items-center gap-1">
         <div className="flex-1"><GlobalSearch /></div>
-        <Button variant="ghost" size="icon" onClick={() => router.refresh()} title="רענן נתונים" className="shrink-0">
+        <Button variant="ghost" size="icon" onClick={() => window.location.reload()} title="רענן נתונים" className="shrink-0">
           <RefreshCw className="h-4 w-4 text-slate-400" />
         </Button>
       </div>
