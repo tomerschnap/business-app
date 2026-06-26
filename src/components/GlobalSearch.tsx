@@ -66,13 +66,70 @@ export default function GlobalSearch({ mobile }: { mobile?: boolean }) {
 
   function go(href: string) { router.push(href); setOpen(false); setQuery('') }
 
+  const modal = open && (
+    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-20 px-4" onClick={() => setOpen(false)}>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100">
+          <Search className="h-5 w-5 text-slate-400 shrink-0" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="חפש לקוחות, תורים, הזמנות..."
+            className="flex-1 bg-transparent outline-none text-slate-800 text-base placeholder:text-slate-400"
+          />
+          {query && <button onClick={() => setQuery('')}><X className="h-4 w-4 text-slate-400" /></button>}
+          <button onClick={() => setOpen(false)} className="text-xs text-slate-400 border border-slate-200 rounded px-2 py-1">Esc</button>
+        </div>
+
+        <div className="max-h-96 overflow-y-auto">
+          {loading && <p className="text-center py-6 text-slate-400 text-sm">מחפש...</p>}
+          {!loading && query && results.length === 0 && (
+            <p className="text-center py-6 text-slate-400 text-sm">לא נמצאו תוצאות</p>
+          )}
+          {!loading && !query && (
+            <p className="text-center py-6 text-slate-400 text-sm">הקלד לחיפוש...</p>
+          )}
+          {results.length > 0 && (
+            <ul className="py-2">
+              {results.map((r, i) => {
+                const Icon = ICON[r.type]
+                return (
+                  <li key={i}>
+                    <button
+                      onClick={() => go(r.href)}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors text-right"
+                    >
+                      <div className={cn('rounded-lg p-1.5 shrink-0',
+                        r.type === 'customer' ? 'bg-blue-100 text-blue-600' :
+                        r.type === 'appointment' ? 'bg-green-100 text-green-600' :
+                        'bg-purple-100 text-purple-600'
+                      )}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0 text-right">
+                        <p className="text-sm font-medium text-slate-800 truncate">{r.label}</p>
+                        <p className="text-xs text-slate-400 truncate">{LABEL[r.type]}{r.sub ? ` · ${r.sub}` : ''}</p>
+                      </div>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
   if (mobile) {
     return (
       <>
         <Button variant="ghost" size="icon" onClick={() => setOpen(true)}>
           <Search className="h-5 w-5 text-slate-500" />
         </Button>
-        {open && <SearchModal />}
+        {modal}
       </>
     )
   }
@@ -87,66 +144,7 @@ export default function GlobalSearch({ mobile }: { mobile?: boolean }) {
         <span className="flex-1 text-right">חיפוש...</span>
         <kbd className="hidden sm:inline text-xs bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-400">⌘K</kbd>
       </button>
-      {open && <SearchModal />}
+      {modal}
     </>
   )
-
-  function SearchModal() {
-    return (
-      <div className="fixed inset-0 z-[100] flex items-start justify-center pt-20 px-4" onClick={() => setOpen(false)}>
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-        <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100">
-            <Search className="h-5 w-5 text-slate-400 shrink-0" />
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="חפש לקוחות, תורים, הזמנות..."
-              className="flex-1 bg-transparent outline-none text-slate-800 text-base placeholder:text-slate-400"
-            />
-            {query && <button onClick={() => setQuery('')}><X className="h-4 w-4 text-slate-400" /></button>}
-            <button onClick={() => setOpen(false)} className="text-xs text-slate-400 border border-slate-200 rounded px-2 py-1">Esc</button>
-          </div>
-
-          <div className="max-h-96 overflow-y-auto">
-            {loading && <p className="text-center py-6 text-slate-400 text-sm">מחפש...</p>}
-            {!loading && query && results.length === 0 && (
-              <p className="text-center py-6 text-slate-400 text-sm">לא נמצאו תוצאות</p>
-            )}
-            {!loading && !query && (
-              <p className="text-center py-6 text-slate-400 text-sm">הקלד לחיפוש...</p>
-            )}
-            {results.length > 0 && (
-              <ul className="py-2">
-                {results.map((r, i) => {
-                  const Icon = ICON[r.type]
-                  return (
-                    <li key={i}>
-                      <button
-                        onClick={() => go(r.href)}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors text-right"
-                      >
-                        <div className={cn('rounded-lg p-1.5 shrink-0',
-                          r.type === 'customer' ? 'bg-blue-100 text-blue-600' :
-                          r.type === 'appointment' ? 'bg-green-100 text-green-600' :
-                          'bg-purple-100 text-purple-600'
-                        )}>
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="flex-1 min-w-0 text-right">
-                          <p className="text-sm font-medium text-slate-800 truncate">{r.label}</p>
-                          <p className="text-xs text-slate-400 truncate">{LABEL[r.type]}{r.sub ? ` · ${r.sub}` : ''}</p>
-                        </div>
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
 }
