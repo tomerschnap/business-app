@@ -551,8 +551,9 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
                 )}
               </Label>
               <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
-                <WheelPicker key={form.date} slots={availableSlots.length > 0 ? availableSlots : (form.date ? [] : ALL_TIME_SLOTS)} value={form.time} onChange={v => set('time', v)} />
+                <WheelPicker key={form.date} slots={availableSlots.length > 0 ? availableSlots : []} value={form.time} onChange={v => set('time', v)} />
               </div>
+              {!form.date && <p className="text-xs text-slate-400">בחר תאריך כדי לראות שעות פנויות</p>}
               {form.date && dayBlocked && <p className="text-xs text-red-500">תאריך זה חסום — לא ניתן לקבוע תור</p>}
               {form.date && !dayBlocked && dayClosed && <p className="text-xs text-red-500">העסק סגור ביום זה — לא ניתן לקבוע תור</p>}
               {form.date && !dayClosed && availableSlots.length === 0 && <p className="text-xs text-amber-600">כל השעות ביום זה תפוסות</p>}
