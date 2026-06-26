@@ -9,7 +9,7 @@ export default async function AppointmentsPage() {
 
   const [{ data: appointments }, { data: customers }, { data: profile }, { data: services }, { data: blockedDates }] = await Promise.all([
     supabase.from('appointments').select('*').eq('business_id', businessId).order('date', { ascending: true }).order('time', { ascending: true }),
-    supabase.from('customers').select('id, name').eq('business_id', businessId).order('name'),
+    supabase.from('customers').select('id, name, phone').eq('business_id', businessId).order('name'),
     supabase.from('business_profiles').select('working_hours').eq('user_id', user?.id ?? '').single(),
     supabase.from('services').select('*').eq('business_id', businessId).order('name'),
     supabase.from('blocked_dates').select('date, reason').eq('business_id', businessId).order('date'),

@@ -20,7 +20,7 @@ type Appointment = {
   id: string; customer_name: string; date: string; time: string; duration: string
   notes: string; phone: string; status: string; price: number; created_at: string
 }
-type Customer = { id: string; name: string }
+type Customer = { id: string; name: string; phone?: string }
 type Service = { id: string; name: string; price: number; duration: string }
 type DayHours = { enabled: boolean; open: string; close: string }
 type WorkingHours = Record<string, DayHours>
@@ -156,6 +156,9 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
   const [editing, setEditing] = useState<Appointment | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [customerMode, setCustomerMode] = useState<'select' | 'new'>('select')
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false)
+  const filteredCustomers = customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase()))
   const [loading, setLoading] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
@@ -433,23 +436,55 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
               <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm"><User className="h-4 w-4 text-slate-400" /> לקוח</Label>
               {customers.length > 0 && (
                 <div className="flex rounded-lg border border-slate-200 overflow-hidden text-sm w-fit">
-                  <button onClick={() => { setCustomerMode('select'); set('customer_name', '') }}
+                  <button onClick={() => { setCustomerMode('select'); set('customer_name', ''); setCustomerSearch(''); setCustomerDropdownOpen(false) }}
                     className={cn('flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors', customerMode === 'select' ? 'bg-primary text-white' : 'text-slate-500 hover:bg-slate-50')}>
                     <User className="h-3.5 w-3.5" /> לקוח קיים
                   </button>
-                  <button onClick={() => { setCustomerMode('new'); set('customer_name', '') }}
+                  <button onClick={() => { setCustomerMode('new'); set('customer_name', ''); setCustomerSearch(''); setCustomerDropdownOpen(false) }}
                     className={cn('flex items-center gap-1.5 px-3 py-1.5 font-medium transition-colors', customerMode === 'new' ? 'bg-primary text-white' : 'text-slate-500 hover:bg-slate-50')}>
                     <UserPlus className="h-3.5 w-3.5" /> חדש
                   </button>
                 </div>
               )}
               {customerMode === 'select' && customers.length > 0 ? (
-                <Select value={form.customer_name} onValueChange={v => set('customer_name', v ?? '')}>
-                  <SelectTrigger className="h-11 text-base"><SelectValue placeholder="בחר לקוח מהרשימה" /></SelectTrigger>
-                  <SelectContent>{customers.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent>
-                </Select>
+                <div className="relative">
+                  <Input
+                    value={customerSearch || form.customer_name}
+                    onChange={e => { setCustomerSearch(e.target.value); set('customer_name', ''); setCustomerDropdownOpen(true) }}
+                    onFocus={() => setCustomerDropdownOpen(true)}
+                    placeholder="חפש לקוח לפי שם..."
+                    className="h-12 text-lg font-medium"
+                  />
+                  {customerDropdownOpen && filteredCustomers.length > 0 && (
+                    <ul className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                      {filteredCustomers.map(c => (
+                        <li key={c.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              set('customer_name', c.name)
+                              if (c.phone) set('phone', c.phone)
+                              setCustomerSearch('')
+                              setCustomerDropdownOpen(false)
+                            }}
+                            className="w-full text-right px-4 py-2.5 hover:bg-slate-50 transition-colors flex items-center justify-between"
+                          >
+                            <span className="text-sm font-medium text-slate-800">{c.name}</span>
+                            {c.phone && <span className="text-xs text-slate-400 dir-ltr">{c.phone}</span>}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {customerDropdownOpen && customerSearch && filteredCustomers.length === 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg px-4 py-3 text-sm text-slate-400">לא נמצאו לקוחות</div>
+                  )}
+                </div>
               ) : (
-                <Input value={form.customer_name} onChange={e => set('customer_name', e.target.value)} placeholder="הקלד שם לקוח..." className="h-11 text-base" autoFocus={customerMode === 'new'} />
+                <Input value={form.customer_name} onChange={e => set('customer_name', e.target.value)} placeholder="הקלד שם לקוח..." className="h-12 text-lg font-medium" autoFocus={customerMode === 'new'} />
+              )}
+              {form.customer_name && (
+                <p className="text-base font-semibold text-primary">{form.customer_name}</p>
               )}
             </div>
 
