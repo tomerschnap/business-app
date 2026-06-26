@@ -318,7 +318,7 @@ export default function CustomersClient({
             </div>
             <div className="space-y-2">
               <Label>טלפון</Label>
-              <Input dir="ltr" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="050-0000000" className="text-left" />
+              <Input dir="ltr" type="tel" inputMode="numeric" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/[^0-9-]/g, '') }))} placeholder="050-0000000" className="text-left" />
             </div>
             <div className="space-y-2">
               <Label>אימייל</Label>

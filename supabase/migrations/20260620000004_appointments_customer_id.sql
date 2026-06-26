@@ -1,0 +1,2 @@
+ALTER TABLE appointments
+  ADD COLUMN IF NOT EXISTS customer_id UUID REFERENCES customers(id) ON DELETE SET NULL;

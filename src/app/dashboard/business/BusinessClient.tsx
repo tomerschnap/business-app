@@ -178,7 +178,7 @@ export default function BusinessClient({ initialProfile, userId, initialBlockedD
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-slate-400" /> טלפון</Label>
-              <Input dir="ltr" className="text-left" value={form.phone} onChange={e => setField('phone', e.target.value)} placeholder="050-0000000" />
+              <Input dir="ltr" type="tel" inputMode="numeric" className="text-left" value={form.phone} onChange={e => setField('phone', e.target.value.replace(/[^0-9-]/g, ''))} placeholder="050-0000000" />
             </div>
             <div className="space-y-2">
               <Label className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-slate-400" /> אימייל</Label>

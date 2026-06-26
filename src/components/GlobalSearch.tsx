@@ -39,7 +39,7 @@ export default function GlobalSearch({ mobile }: { mobile?: boolean }) {
 
   useEffect(() => {
     if (!query.trim()) { setResults([]); return }
-    const timer = setTimeout(() => search(query.trim()), 250)
+    const timer = setTimeout(() => search(query.trim()), 300)
     return () => clearTimeout(timer)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query])

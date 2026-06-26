@@ -454,33 +454,40 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
             </div>
 
             {/* Service */}
-            {services.length > 0 && (
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm"><Scissors className="h-4 w-4 text-slate-400" /> שירות</Label>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm"><Scissors className="h-4 w-4 text-slate-400" /> שירות</Label>
+              {services.length > 0 && (
                 <Select
-                  value=""
+                  value={services.find(s => s.name === form.notes)?.id ?? ''}
                   onValueChange={v => {
+                    if (v === '__custom__') {
+                      set('notes', '')
+                      return
+                    }
                     const svc = services.find(s => s.id === v)
                     if (svc) {
+                      set('notes', svc.name)
                       set('duration', svc.duration)
                       set('price', String(svc.price || ''))
                     }
                   }}
                 >
-                  <SelectTrigger className="h-11 text-base"><SelectValue placeholder="בחר שירות (ממלא משך ומחיר)" /></SelectTrigger>
+                  <SelectTrigger className="h-11 text-base"><SelectValue placeholder="בחר שירות מהרשימה" /></SelectTrigger>
                   <SelectContent>
                     {services.map(s => (
                       <SelectItem key={s.id} value={s.id}>{s.name} — {s.duration}{s.price ? ` · ₪${s.price}` : ''}</SelectItem>
                     ))}
+                    <SelectItem value="__custom__">✏️ שירות אחר (הקלדה ידנית)</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-            )}
+              )}
+              <Input value={form.notes} onChange={e => set('notes', e.target.value)} placeholder={services.length > 0 ? "או הקלד שירות ידנית..." : "שם השירות"} className="h-11 text-base" />
+            </div>
 
             {/* Phone */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm"><Phone className="h-4 w-4 text-slate-400" /> טלפון</Label>
-              <Input dir="ltr" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="050-0000000" className="h-11 text-base text-left" />
+              <Input dir="ltr" type="tel" inputMode="numeric" value={form.phone} onChange={e => set('phone', e.target.value.replace(/[^0-9-]/g, ''))} placeholder="050-0000000" className="h-11 text-base text-left" />
             </div>
 
             {/* Date */}

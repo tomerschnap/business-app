@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
-import { Menu, X, Briefcase, LayoutDashboard, Users, CalendarDays, CalendarRange, LogOut, ShoppingBag, Store, Users2, ClipboardList, Scissors, BarChart2 } from 'lucide-react'
+import { Menu, X, Briefcase, LayoutDashboard, Users, CalendarDays, CalendarRange, LogOut, ShoppingBag, Store, Users2, ClipboardList, Scissors, BarChart2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import GlobalSearch from '@/components/GlobalSearch'
 
@@ -49,7 +49,12 @@ export default function MobileHeader({ userEmail }: { userEmail: string }) {
           </div>
           <span className="font-bold text-slate-800">{currentPage}</span>
         </div>
-        <GlobalSearch mobile />
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" onClick={() => router.refresh()}>
+            <RefreshCw className="h-4 w-4 text-slate-500" />
+          </Button>
+          <GlobalSearch mobile />
+        </div>
       </header>
 
       {/* Overlay */}
