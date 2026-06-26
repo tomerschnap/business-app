@@ -458,9 +458,9 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
               <Label className="flex items-center gap-2 text-slate-700 font-semibold text-sm"><Scissors className="h-4 w-4 text-slate-400" /> שירות</Label>
               {services.length > 0 && (
                 <Select
-                  value={services.find(s => s.name === form.notes)?.id ?? ''}
+                  value="__placeholder__"
                   onValueChange={v => {
-                    if (v === '__custom__') {
+                    if (v === '__custom__' || v === '__placeholder__') {
                       set('notes', '')
                       return
                     }
@@ -472,12 +472,17 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
                     }
                   }}
                 >
-                  <SelectTrigger className="h-11 text-base"><SelectValue placeholder="בחר שירות מהרשימה" /></SelectTrigger>
+                  <SelectTrigger className="h-11 text-base">
+                    <span className={form.notes && services.some(s => s.name === form.notes) ? 'text-slate-800' : 'text-slate-400'}>
+                      {form.notes && services.some(s => s.name === form.notes) ? form.notes : 'בחר שירות מהרשימה'}
+                    </span>
+                  </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="__placeholder__" className="hidden">בחר שירות</SelectItem>
                     {services.map(s => (
-                      <SelectItem key={s.id} value={s.id}>{s.name} — {s.duration}{s.price ? ` · ₪${s.price}` : ''}</SelectItem>
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                     ))}
-                    <SelectItem value="__custom__">✏️ שירות אחר (הקלדה ידנית)</SelectItem>
+                    <SelectItem value="__custom__">שירות אחר (הקלדה ידנית)</SelectItem>
                   </SelectContent>
                 </Select>
               )}
