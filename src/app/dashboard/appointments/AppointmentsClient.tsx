@@ -57,10 +57,10 @@ function durationToMinutes(d: string) {
 }
 function getSlotsForDate(date: string, wh: WorkingHours | null): string[] {
   if (!wh || !date) return ALL_TIME_SLOTS
-  const day = DAY_KEYS[new Date(date + 'T00:00:00').getDay()]
+  const day = DAY_KEYS[new Date(date + 'T12:00:00').getDay()]
   const cfg = wh[day]
   if (!cfg?.enabled) return []
-  return ALL_TIME_SLOTS.filter(t => t >= cfg.open && t <= cfg.close)
+  return ALL_TIME_SLOTS.filter(t => t >= cfg.open && t < cfg.close)
 }
 
 const emptyForm = { customer_name: '', date: '', time: '09:00', duration: '30 דקות', notes: '', phone: '', status: 'ממתין', price: '' }
