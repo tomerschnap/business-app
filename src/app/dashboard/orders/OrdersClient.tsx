@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { localTodayStr, parseDateOnly } from '@/lib/dates'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -40,7 +41,7 @@ const ORDER_STATUS_STYLE: Record<string, string> = {
 const emptyForm = { customer_name: '', date: '', title: '', description: '', notes: '', service_name: '', price: '', status: 'הזמנה חדשה' }
 
 function DateBadge({ date }: { date: string }) {
-  const today = new Date().toISOString().split('T')[0]
+  const today = localTodayStr()
   if (date < today) return <Badge variant="secondary" className="text-xs font-normal">עבר</Badge>
   if (date === today) return <Badge className="text-xs bg-green-500 hover:bg-green-600 font-normal">היום</Badge>
   return <Badge variant="outline" className="text-xs font-normal text-blue-600 border-blue-200">קרוב</Badge>
@@ -84,7 +85,7 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
   const [detailOrder, setDetailOrder] = useState<Order | null>(null)
   const [showHistory, setShowHistory] = useState(false)
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = localTodayStr()
   const upcoming = orders.filter(o => o.date >= today)
   const past = orders.filter(o => o.date < today).sort((a, b) => b.date.localeCompare(a.date))
   const displayed = showHistory ? past : upcoming
@@ -213,7 +214,7 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
               else {
                 groups.push({
                   date: o.date,
-                  label: new Date(o.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' }),
+                  label: parseDateOnly(o.date).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' }),
                   items: [o],
                 })
               }
@@ -335,7 +336,7 @@ export default function OrdersClient({ initialOrders, customers: initialCustomer
               </p>
               <p className="flex items-center gap-2">
                 <CalendarDays className="h-4 w-4 text-slate-400 shrink-0" />
-                {new Date(detailOrder.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                {parseDateOnly(detailOrder.date).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
               {detailOrder.service_name && (
                 <p className="flex items-center gap-2">

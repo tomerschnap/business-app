@@ -5,16 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BarChart2, TrendingUp, Calendar, Banknote, Users2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { localTodayStr, parseDateOnly, weekStartStr } from '@/lib/dates'
 
 type Appointment = { date: string; price: number; status: string; customer_name: string }
 type GroupSession = { date: string; price_per_participant: number; enrolled: number }
 type Period = 'daily' | 'weekly' | 'monthly'
-
-function startOfWeek(d: Date) {
-  const diff = d.getDate() - d.getDay()
-  return new Date(d.getFullYear(), d.getMonth(), diff)
-}
-function isoWeek(d: Date) { return startOfWeek(d).toISOString().split('T')[0] }
 
 export default function ReportsClient({ appointments, groupSessions }: {
   appointments: Appointment[]
@@ -37,9 +32,8 @@ export default function ReportsClient({ appointments, groupSessions }: {
     const map = new Map<string, { apptIncome: number; groupIncome: number; apptCount: number; groupCount: number }>()
 
     function key(date: string) {
-      const d = new Date(date + 'T00:00:00')
       if (period === 'daily') return date
-      if (period === 'weekly') return isoWeek(d)
+      if (period === 'weekly') return weekStartStr(parseDateOnly(date))
       return date.slice(0, 7)
     }
 
@@ -60,9 +54,9 @@ export default function ReportsClient({ appointments, groupSessions }: {
       .slice(0, 30)
   }, [paidAppts, groupIncomeSessions, period])
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = localTodayStr()
   const thisMonth = today.slice(0, 7)
-  const thisWeekStart = isoWeek(new Date())
+  const thisWeekStart = weekStartStr(new Date())
 
   function sumIncome(filter: (date: string) => boolean) {
     const a = paidAppts.filter(x => filter(x.date)).reduce((s, x) => s + x.price, 0)
@@ -82,8 +76,8 @@ export default function ReportsClient({ appointments, groupSessions }: {
   const totalGroupSessions = groupSessions.length
 
   function formatKey(key: string) {
-    if (period === 'daily') return new Date(key + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'short' })
-    if (period === 'weekly') return `שבוע ${new Date(key + 'T00:00:00').toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })}`
+    if (period === 'daily') return parseDateOnly(key).toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'short' })
+    if (period === 'weekly') return `שבוע ${parseDateOnly(key).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })}`
     const [y, m] = key.split('-')
     return new Date(Number(y), Number(m) - 1).toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })
   }

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { ChevronRight, ChevronLeft, ShoppingBag, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { parseDateOnly } from '@/lib/dates'
 
 type Appointment = { id: string; customer_name: string; date: string; time: string; duration: string; notes: string }
 type Order = { id: string; customer_name: string; date: string; notes: string }
@@ -287,7 +288,7 @@ export default function CalendarClient({ initialAppointments, initialOrders }: {
               </Button>
             </div>
             <div className="text-sm text-slate-600 space-y-1.5 pr-5">
-              <p>📅 {new Date(detailAppt.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+              <p>📅 {parseDateOnly(detailAppt.date).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
               <p dir="ltr" className="text-right">🕐 {detailAppt.time} · {detailAppt.duration || '30 דקות'}</p>
               {detailAppt.notes && <p>📝 {detailAppt.notes}</p>}
             </div>
@@ -311,7 +312,7 @@ export default function CalendarClient({ initialAppointments, initialOrders }: {
               </Button>
             </div>
             <div className="text-sm text-slate-600 space-y-1.5 pr-5">
-              <p>📅 {new Date(detailOrder.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+              <p>📅 {parseDateOnly(detailOrder.date).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
               {detailOrder.notes && <p>📝 {detailOrder.notes}</p>}
             </div>
           </div>

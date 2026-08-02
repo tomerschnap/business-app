@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { Plus, Pencil, Trash2, Users2, CalendarDays, Clock, UserCheck, UserX, History, AlignLeft, Loader2, X, Banknote } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatDateOnlyHe, getDayKey, localTodayStr } from '@/lib/dates'
 
 type GroupSession = {
   id: string; title: string; date: string; time: string
@@ -21,7 +22,6 @@ type Participant = { id: string; session_id: string; name: string; created_at: s
 type DayHours = { enabled: boolean; open: string; close: string }
 type WorkingHours = Record<string, DayHours>
 
-const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 const ITEM_H = 44
 
 const ALL_TIME_SLOTS: string[] = (() => {
@@ -40,10 +40,9 @@ function timeToMinutes(t: string) {
 
 function getSlotsForDate(date: string, wh: WorkingHours | null): string[] {
   if (!wh || !date) return ALL_TIME_SLOTS
-  const day = DAY_KEYS[new Date(date + 'T00:00:00').getDay()]
-  const cfg = wh[day]
+  const cfg = wh[getDayKey(date)]
   if (!cfg?.enabled) return []
-  return ALL_TIME_SLOTS.filter(t => t >= cfg.open && t <= cfg.close)
+  return ALL_TIME_SLOTS.filter(t => t >= cfg.open && t < cfg.close)
 }
 
 // ── Wheel Picker ─────────────────────────────────────────────────────────────
@@ -103,7 +102,7 @@ function SpotsBadge({ max, enrolled }: { max: number; enrolled: number }) {
 }
 
 function DateBadge({ date }: { date: string }) {
-  const today = new Date().toISOString().split('T')[0]
+  const today = localTodayStr()
   if (date < today) return <Badge variant="secondary" className="text-xs font-normal">עבר</Badge>
   if (date === today) return <Badge className="text-xs bg-green-500 hover:bg-green-600 font-normal">היום</Badge>
   return <Badge variant="outline" className="text-xs font-normal text-blue-600 border-blue-200">קרוב</Badge>
@@ -134,7 +133,7 @@ export default function GroupClient({ initialSessions, workingHours, businessId 
   const [newParticipantName, setNewParticipantName] = useState('')
   const [addingParticipant, setAddingParticipant] = useState(false)
 
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = localTodayStr()
   const upcoming = sessions.filter(s => s.date >= todayStr)
   const past = sessions.filter(s => s.date < todayStr).sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time))
   const displayed = showHistory ? past : upcoming
@@ -253,6 +252,8 @@ export default function GroupClient({ initialSessions, workingHours, businessId 
   }
 
   async function handleDelete(id: string) {
+    const { error: partErr } = await supabase.from('group_session_participants').delete().eq('session_id', id)
+    if (partErr) { toast.error(partErr.message); setDeleteId(null); return }
     const { error } = await supabase.from('group_sessions').delete().eq('id', id).eq('business_id', businessId)
     if (error) toast.error(error.message)
     else { setSessions(ss => ss.filter(s => s.id !== id)); toast.success('הפגישה נמחקה') }
@@ -313,7 +314,7 @@ export default function GroupClient({ initialSessions, workingHours, businessId 
                   <div className="flex items-center gap-4 text-sm text-slate-600 bg-slate-50 rounded-xl px-3 py-2">
                     <span className="flex items-center gap-1.5">
                       <CalendarDays className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                      {new Date(s.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'short' })}
+                      {formatDateOnlyHe(s.date, { weekday: 'short', day: 'numeric', month: 'short' })}
                     </span>
                     <span className="flex items-center gap-1.5 font-medium" dir="ltr">
                       <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
@@ -359,7 +360,7 @@ export default function GroupClient({ initialSessions, workingHours, businessId 
                   <div>
                     <DialogTitle className="text-base font-bold leading-tight">{participantsSession.title}</DialogTitle>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {new Date(participantsSession.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })} · {participantsSession.time}
+                      {formatDateOnlyHe(participantsSession.date)} · {participantsSession.time}
                     </p>
                   </div>
                 </div>

@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Pencil, Trash2, CalendarDays, Clock, User, UserPlus, Calendar, AlignLeft, Timer, Loader2, History, Phone, Banknote, Download, Scissors } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { cn } from '@/lib/utils'
+import { formatDateOnlyHe, getDayKey, localTodayStr } from '@/lib/dates'
 
 type Appointment = {
   id: string; customer_name: string; date: string; time: string; duration: string
@@ -25,7 +26,6 @@ type Service = { id: string; name: string; price: number; duration: string }
 type DayHours = { enabled: boolean; open: string; close: string }
 type WorkingHours = Record<string, DayHours>
 
-const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 const DURATIONS = ['15 דקות', '30 דקות', '45 דקות', 'שעה']
 const STATUSES = ['ממתין', 'אושר', 'בוטל', 'הגיע', 'לא הגיע']
 const ITEM_H = 44
@@ -57,8 +57,7 @@ function durationToMinutes(d: string) {
 }
 function getSlotsForDate(date: string, wh: WorkingHours | null): string[] {
   if (!wh || !date) return ALL_TIME_SLOTS
-  const day = DAY_KEYS[new Date(date + 'T12:00:00').getDay()]
-  const cfg = wh[day]
+  const cfg = wh[getDayKey(date)]
   if (!cfg?.enabled) return []
   return ALL_TIME_SLOTS.filter(t => t >= cfg.open && t < cfg.close)
 }
@@ -79,7 +78,7 @@ function WheelPicker({ slots, value, onChange }: { slots: string[]; value: strin
     const idx = slots.indexOf(value)
     scrollTo(idx >= 0 ? idx : 0, false)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots])
+  }, [slots, value])
 
   function handleScroll() {
     if (debRef.current) clearTimeout(debRef.current)
@@ -115,7 +114,7 @@ function WheelPicker({ slots, value, onChange }: { slots: string[]; value: strin
 }
 
 function StatusBadge({ date }: { date: string }) {
-  const today = new Date().toISOString().split('T')[0]
+  const today = localTodayStr()
   if (date < today) return <Badge variant="secondary" className="text-xs font-normal">עבר</Badge>
   if (date === today) return <Badge className="text-xs bg-green-500 hover:bg-green-600 font-normal">היום</Badge>
   return <Badge variant="outline" className="text-xs font-normal text-blue-600 border-blue-200">קרוב</Badge>
@@ -164,7 +163,7 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
   const [showHistory, setShowHistory] = useState(false)
 
   // ── Available slots ──────────────────────────────────────────────────────────
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = localTodayStr()
 
   const blockedByOverlap = new Set<string>()
   appointments
@@ -292,9 +291,8 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
   }
 
   // ── Split upcoming / past ────────────────────────────────────────────────────
-  const today2 = new Date().toISOString().split('T')[0]
-  const upcoming = appointments.filter(a => a.date >= today2)
-  const past = appointments.filter(a => a.date < today2).reverse()
+  const upcoming = appointments.filter(a => a.date >= todayStr)
+  const past = appointments.filter(a => a.date < todayStr).reverse()
   const displayed = showHistory ? past : upcoming
 
   function makeGroups(list: Appointment[]) {
@@ -302,7 +300,7 @@ export default function AppointmentsClient({ initialAppointments, customers: ini
     for (const a of list) {
       const last = groups[groups.length - 1]
       if (last && last.date === a.date) { last.items.push(a) } else {
-        groups.push({ date: a.date, label: new Date(a.date + 'T00:00:00').toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' }), items: [a] })
+        groups.push({ date: a.date, label: formatDateOnlyHe(a.date), items: [a] })
       }
     }
     return groups
